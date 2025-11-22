@@ -1,0 +1,3 @@
+[submodule "HeliPort"]
+	path = HeliPort
+	url = https://github.com/OpenIntelWireless/HeliPort
