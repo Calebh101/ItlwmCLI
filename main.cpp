@@ -10,14 +10,21 @@
 #include <QFile>
 #include <iostream>
 
+#define VERSION "0.0.0A"
+#define ALLOW_CONSTANT_REFRESH true
+
 #define VISIBLE_LOG_LINES 4
 #define VISIBLE_NETWORKS 20
+#define BAR_WIDTH 2
 
 using namespace ftxui;
 
 auto screen = ScreenInteractive::TerminalOutput();
 std::vector<std::string> output;
+std::vector<int> signalStrengths;
 int positionAway = 0;
+bool running = false;
+std::thread refresher;
 
 // Sections
     // Device info (is itlwm running, device model, driver info)
@@ -46,6 +53,7 @@ rssi_stage rssiToEnum(bool valid, int rssi) {
     if (!valid) return rssi_stage_unavailable;
     rssi = abs(rssi);
 
+    if (rssi <= 0) return rssi_stage_unavailable;
     if (rssi <= 50) return rssi_stage_excellent;
     if (rssi <= 60) return rssi_stage_good;
     if (rssi <= 70) return rssi_stage_fair;
@@ -121,8 +129,12 @@ QStringList parseCommand(const QString& input) {
 
 void usage() {
     log("Usage:");
-    log(1, "help        Print this help message");
-    log(1, "exit/e        Peacefully exit my tool");
+    log(1, "help                                Print this help message");
+    log(1, "exit/e                              Peacefully exit my tool");
+    log(1, "power [status]                      Turn WiFi on or off. 'status' can be 'on' or 'off'.");
+    log(1, "connect [ssid] [password]           Connect to a WiFi network.");
+    log(1, "associate [ssid] [password]         Associate a WiFi network.");
+    log(1, "disassociate [ssid]                 Disassociate a WiFi network.");
 }
 
 bool processCommand(std::string input) {
@@ -133,10 +145,51 @@ bool processCommand(std::string input) {
         usage();
     } else if (action == "exit" || action == "e") {
         log("Thanks for stopping by!");
+        running = false;
+        if (refresher.joinable()) refresher.join();
         screen.Exit();
-    } else if (action == "connect") {
-    } else if (action == "echo") {
+    } else if (action == "echo") { // Debug command
         log(QString("Received command of '%1' with %2 extra arguments").arg(action).arg(command.size() - 1).toStdString());
+    } else if (action == "power") {
+        if (command.size() <= 2) {
+            const QString status = command[1];
+            int result;
+
+            if (status == "on") {
+                result = power_on();
+            } else if (status == "off") {
+                result = power_off();
+            } else {
+                log("State must be 'on' or 'off'.");
+                return true;
+            }
+
+            log(QString("Power turned %1 with status %2.").arg(status).arg(result).toStdString());
+        } else {
+            log("Command 'power' needs 1 argument.");
+        }
+    } else if (action == "connect") {
+        if (command.size() >= 3) {
+            const QString ssid = command[1];
+            const QString pswd = command[2];
+
+            connect_network(ssid.toUtf8().constData(), pswd.toUtf8().constData());
+            log(QString("Connecting to network '%1' with password '%2'...").arg(ssid).arg(pswd).toStdString());
+        }
+    } else if (action == "associate") {
+        if (command.size() >= 3) {
+            const QString ssid = command[1];
+            const QString pswd = command[2];
+
+            associate_ssid(ssid.toUtf8().constData(), pswd.toUtf8().constData());
+            log(QString("Associating network '%1' with password '%2'...").arg(ssid).arg(pswd).toStdString());
+        }
+    } else if (action == "disassociate") {
+        if (command.size() >= 2) {
+            const QString ssid = command[1];
+            dis_associate_ssid(ssid.toUtf8().constData());
+            log(QString("Disassociating network '%1'...").arg(ssid).toStdString());
+        }
     } else {
         return false;
     }
@@ -149,6 +202,8 @@ bool compareNetworkStrength(const ioctl_network_info& a, const ioctl_network_inf
 }
 
 int main(int argc, char *argv[]) {
+    std::cout << "Loading settings..." << std::endl;
+    QCoreApplication app(argc, argv);
     QDir exec(QCoreApplication::applicationDirPath());
     QFile settingsfile(exec.filePath("ItlwmCLI.settings.json"));
 
@@ -158,7 +213,7 @@ int main(int argc, char *argv[]) {
             out << "{}";
             settingsfile.close();
         } else {
-            std::cout << "Failed to create settings file:" << settingsfile.fileName().toStdString() << std::endl;
+            std::cout << "Failed to create settings file: " << settingsfile.fileName().toStdString() << std::endl;
             exit(1);
         }
     }
@@ -167,9 +222,11 @@ int main(int argc, char *argv[]) {
         QTextStream in(&settingsfile);
         settingsfile.close();
     } else {
-        std::cout << "Failed to read settings file:" << settingsfile.fileName().toStdString() << std::endl;
+        std::cout << "Failed to read settings file: " << settingsfile.fileName().toStdString() << std::endl;
         exit(1);
     }
+
+    std::cout << "Loading application..." << std::endl;
 
     network_info_list_t* networks = new network_info_list_t;
     platform_info_t* platformInfo = new platform_info_t;
@@ -180,7 +237,9 @@ int main(int argc, char *argv[]) {
     uint32_t current80211State = 0;
 
     std::string input_str;
+    auto lastTime = std::chrono::steady_clock::now();
     auto input = Input(&input_str, "Type 'help' for available commands");
+    std::cout << "Starting renderer..." << std::endl;
 
     auto renderer = Renderer([&] {
         Elements output_elements;
@@ -189,7 +248,7 @@ int main(int argc, char *argv[]) {
         bool foundConnected = false;
 
         for (size_t i = start - positionAway; i < output.size() - positionAway; ++i) {
-            output_elements.push_back(text(QString("%1. %2").arg(static_cast<qlonglong>(i + 1)).arg(output[i]).toStdString()));
+            output_elements.push_back(text(QString("%1 %2").arg(QString("%1.").arg(static_cast<qlonglong>(i + 1)).leftJustified(4, ' ')).arg(output[i]).toStdString()));
         }
 
         while (output_elements.size() < VISIBLE_LOG_LINES) {
@@ -204,9 +263,24 @@ int main(int argc, char *argv[]) {
         bool network_list_available = get_network_list(networks);
         bool station_info_available = get_station_info(stationInfo);
 
-        // So uh, station_info_available is always false for some reason, so we're forcing it
-        station_info_available = true;
-        rssi_stage rssiStage = rssiToEnum(station_info_available, stationInfo->rssi);
+        if (network_power_state_available == false || currentPowerState == false) {
+            memset(currentSsid, 0, sizeof(currentSsid));
+            memset(currentBssid, 0, sizeof(currentBssid));
+            if (platformInfo) memset(platformInfo, 0, sizeof(*platformInfo));
+
+            if (networks) {
+                memset(networks, 0, sizeof(*networks));
+                memset(networks->networks, 0, sizeof(networks->networks));
+                networks->count = 0;
+            }
+
+            if (stationInfo) memset(stationInfo, 0, sizeof(*stationInfo));
+            current80211State = 0;
+        }
+
+        // So uh, station_info_available is always false for some reason, so we're using a different method
+        station_info_available = stationInfo ? true : false;
+        rssi_stage rssiStage = rssiToEnum(station_info_available, stationInfo ? stationInfo->rssi : 0);
 
         if (network_list_available) {
             std::sort(networks->networks, networks->networks + networks->count, compareNetworkStrength);
@@ -220,7 +294,7 @@ int main(int argc, char *argv[]) {
                 });
 
                 if (emptySsid) continue;
-                bool connected = currentSsid == reinterpret_cast<char*>(network.ssid);
+                bool connected = strcmp(currentSsid, reinterpret_cast<char*>(network.ssid)) == 0;
                 if (connected) foundConnected = true;
 
                 networks_elements.push_back(text(QString("%1. %2 %3 %4 %5").arg(amount + 1).arg(network.ssid).arg(network.rssi).arg(network.rsn_protos == 0 ? "" : "(locked)").arg(network_ssid_available && connected ? "(connected)" : "").toStdString()));
@@ -232,31 +306,77 @@ int main(int argc, char *argv[]) {
             networks_elements.push_back(text(""));
         }
 
+        auto currentTime = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastTime);
+
+        if (elapsed.count() >= 200) {
+            signalStrengths.push_back(station_info_available ? stationInfo->rssi : 0);
+            lastTime = currentTime;
+        }
+
+        auto makeGraph = [](int width, int height) -> std::vector<int> {
+            std::vector<int> scaled(width, 0);
+            if (signalStrengths.empty()) return scaled;
+            int i;
+
+            if (signalStrengths.size() * BAR_WIDTH > width) {
+                std::vector<int> subvec(signalStrengths.end() - width / BAR_WIDTH, signalStrengths.end());
+                signalStrengths = subvec;
+            }
+
+            int minRssi = *std::min_element(signalStrengths.begin(), signalStrengths.end());
+            int maxRssi = *std::max_element(signalStrengths.begin(), signalStrengths.end());
+            if (minRssi == maxRssi) maxRssi = minRssi + 1;
+
+            size_t padSize = 0;
+            if (signalStrengths.size() < width) padSize = width - signalStrengths.size() * BAR_WIDTH;
+
+            for (size_t i = 0; i < signalStrengths.size(); ++i) {
+                int rssi = signalStrengths[i];
+                int y = (rssi - minRssi) * height / (maxRssi - minRssi);
+
+                for (size_t j = 0; j < BAR_WIDTH; ++j) {
+                    if (padSize + i * BAR_WIDTH + j < scaled.size()) {
+                        scaled[padSize + i * BAR_WIDTH + j] = y;
+                    }
+                }
+            }
+
+            return scaled;
+        };
+
         return vbox({
             vbox({
-                text(QString("Wireless @ %1").arg(platformInfo->device_info_str).toStdString()) | center,
+                text(QString("ItlwmCLI %1 by Calebh101").arg(VERSION).toStdString()) | center,
+                text(QString("Intel Wireless @%1").arg(platformInfo->device_info_str).toStdString()) | center,
                 text(QString("Powered by itlwm v. %1").arg(platformInfo->driver_info_str).toStdString()) | center,
             }) | border,
             hbox({
                 vbox({
-                    text(QString("%1, %2").arg(network_power_state_available ? (currentPowerState ? "On" : "Off") : "Unavailable").arg(parse80211State(network_80211_state_available, current80211State)).toStdString()),
-                    text(QString("%1 (channel %2)").arg(itlPhyModeToString(station_info_available, stationInfo->op_mode)).arg(station_info_available ? QString::number(stationInfo->channel) : "unavailable").toStdString()),
-                    text(QString("Current SSID: %1").arg(network_ssid_available ? currentSsid : "Unavailable").toStdString()),
-                    text(QString("Signal strength: %1 (%2)").arg(station_info_available ? QString::number(stationInfo->rssi) : "Unavailable").arg(rssiStageToString(rssiStage)).toStdString()),
-                }) | border | flex,
+                    vbox({
+                        text(QString("%1, %2").arg(network_power_state_available ? (currentPowerState ? "On" : "Off") : "Unavailable").arg(parse80211State(network_80211_state_available, current80211State)).toStdString()),
+                        text(QString("%1 (channel %2)").arg(itlPhyModeToString(station_info_available, stationInfo->op_mode)).arg(station_info_available ? QString::number(stationInfo->channel) : "unavailable").toStdString()),
+                        text(QString("Current SSID: %1").arg(network_ssid_available ? currentSsid : "Unavailable").toStdString()),
+                        text(QString("Signal strength: %1 (%2)").arg(station_info_available ? QString::number(stationInfo->rssi) : "Unavailable").arg(rssiStageToString(rssiStage)).toStdString()),
+                    }) | border | size(WIDTH, EQUAL, Terminal::Size().dimx / 2) | size(HEIGHT, EQUAL, 6),
+                    hbox({
+                        graph(makeGraph),
+                    }) | border | flex | size(WIDTH, EQUAL, Terminal::Size().dimx / 2),
+                }),
                 vbox({
                     networks_elements,
-                }) | border | flex,
+                }) | border | size(WIDTH, EQUAL, Terminal::Size().dimx / 2),
             }) | flex,
             vbox({
                 vbox(output_elements),
-                hbox({text("> "), input->Render()}),
+                hbox({text("#.   > "), input->Render()}),
             }) | border | size(HEIGHT, EQUAL, VISIBLE_LOG_LINES + 3) | vscroll_indicator,
         });
     });
 
     auto interactive = CatchEvent(renderer, [&](Event event) {
         if (event == Event::Return) {
+            if (QString::fromStdString(input_str).trimmed().isEmpty()) return true;
             log("> " + input_str);
             bool valid = processCommand(input_str);
             if (!valid) log("Invalid command: " + input_str);
@@ -277,7 +397,22 @@ int main(int argc, char *argv[]) {
         return false;
     });
 
+    running = true;
+
+    if (ALLOW_CONSTANT_REFRESH) {
+        std::cout << "Allowing constant refresh..." << std::endl;
+
+        refresher = std::thread([&] {
+            while (running) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                screen.PostEvent(Event::Custom);
+            }
+        });
+    }
+
+    std::cout << "Starting application..." << std::endl;
     std::system("clear");
     screen.Loop(interactive);
+    running = false;
     return 0;
 }
