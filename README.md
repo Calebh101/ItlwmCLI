@@ -10,7 +10,7 @@ To open it, simply run the binary. You can double-click it from Finder, or use t
 
 # Compatibility
 
-- macOS High Sierra to macOS Tahoe
+- macOS Catalina to macOS Tahoe
 - A 64-bit CPU
 - itlwm (**not** AirportItlwm)
 
