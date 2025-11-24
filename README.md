@@ -48,4 +48,4 @@ Initial beta.
 Requirements:
 - macOS (because it has specific header files that HeliPort needs)
 - HeliPort (run `git submodule update --init`)
-- Everything else is in `/lib` and `/include`
+- `fmt` and `ftxui` installed (I installed from Brew)

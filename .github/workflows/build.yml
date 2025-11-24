@@ -19,9 +19,10 @@ jobs:
           git submodule update --init --recursive
           chmod +x ./build.sh
 
-      - name: Install CMake and Ninja
+      - name: Install Dependencies
         run: |
           brew install cmake ninja || true
+          brew install fmt ftxui || true
 
       - name: Build Debug
         run: |
