@@ -9,32 +9,43 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <deque>
 #include <regex>
 #include <fmt/format.h>
 #include <fstream>
 #include <filesystem>
 
 #define VERSION "0.0.0A"                 // Version of the app.
-#define ENABLE_SETTINGS false            // Whether to use and store settings
-#define CONSTANT_REFRESH_INTERVAL 50     // How many milliseconds the UI should wait to refresh (<= 0 to disable). Must be a factor of 1000.
-#define RSSI_RECORD_INTERVAL 50          // How many milliseconds to wait before the RSSI value should be recorded (dependent on CONSTANT_REFRESH_INTERVAL)
+#define BETA true                        // If the app is in beta.
 
-#define HEADER_LINES 3                   // How many lines the header is.
+#define ENABLE_SETTINGS false            // Whether to use and store settings.
+#define MAX_RSSI_RECORD_LENGTH 10000     // The max length of the RSSI list. After this, new values added chop off the old values.
+#define CONSTANT_REFRESH_INTERVAL 50     // How many milliseconds the UI should wait to refresh (<= 0 to disable). Must be a factor of 1000.
+#define RSSI_RECORD_INTERVAL 5           // How many iterations (CONSTANT_REFRESH_INTERVAL) to wait before the RSSI value should be recorded. The actual interval would be (CONSTANT_REFRESH_INTERVAL * RSSI_RECORD_INTERVAL) milliseconds.
+
+#define HEADER_LINES 2                   // How many lines the header is.
 #define VISIBLE_LOG_LINES 4              // How many lines are used for the command line widget.
 #define VISIBLE_NETWORKS 20              // How many networks should be visible.
 #define BAR_WIDTH 2                      // How wide the bars for the real-time signal graph should be.
 #define TAB_MULTIPLIER 4                 // How many spaces a tab is in the command line widget.
 #define LOG_INDEX_PADDING 5              // How much to pad the log lines' line numbers with spaces
 
+// Make the script aware if it's running in debug mode
+#ifdef __DEBUG
+    #define DEBUG true
+#else
+    #define DEBUG false
+#endif
+
+// I don't wanna have to write 'ftxui::' like 30 times
 using namespace ftxui;
 
 auto screen = ScreenInteractive::TerminalOutput();
 std::vector<std::string> output; // Logs
-std::vector<int> signalStrengths; // Signal strengths recorded (for graphs)
+std::deque<int16_t> signalRssis; // Signal strengths recorded (for graphs)
 int positionAway = 0; // How far we have scrolled up in the command line
 bool running = false; // If the UI update thread should run
 std::thread refresher; // The UI update thread
-auto lastTime = std::chrono::steady_clock::now(); // How long it's been since we've recorded an RSSI
 
 enum rssi_stage {
     rssi_stage_excellent,
@@ -81,9 +92,9 @@ std::string itlPhyModeToString(bool valid, itl_phy_mode mode) {
 
     switch (mode) {
         case ITL80211_MODE_11A: return "IEEE 802.11a";
-        case ITL80211_MODE_11B: return "IEEE 802.11ab";
-        case ITL80211_MODE_11G: return "IEEE 802.11ag";
-        case ITL80211_MODE_11N: return "IEEE 802.11an";
+        case ITL80211_MODE_11B: return "IEEE 802.11b";
+        case ITL80211_MODE_11G: return "IEEE 802.11g";
+        case ITL80211_MODE_11N: return "IEEE 802.11n";
         case ITL80211_MODE_11AC: return "IEEE 802.11ac";
         case ITL80211_MODE_11AX: return "IEEE 802.11ax";
         default: return "Unknown Mode";
@@ -133,8 +144,9 @@ std::vector<std::string> parseCommand(const std::string& input) {
 
 void usage() {
     log("Usage:");
-    log(1, "help                                Print this help message");
-    log(1, "exit/e                              Peacefully exit my tool");
+    log(1, "help                                Print this help message.");
+    log(1, "about                               Show info about ItlwmCLI.");
+    log(1, "exit / e                            Peacefully exit my tool.");
     log(1, "power [status]                      Turn WiFi on or off. 'status' can be 'on' or 'off'.");
     log(1, "connect [ssid] [password]           Connect to a WiFi network.");
     log(1, "associate [ssid] [password]         Associate a WiFi network.");
@@ -158,8 +170,13 @@ bool processCommand(std::string input) {
 
     if (action == "help") {
         usage();
+    } else if (action == "about") {
+        log("ItlwmCLI by Calebh101");
+        log(1, fmt::format("Version: {}", VERSION));
+        log(1, fmt::format("{} release, {} mode", BETA ? "Beta" : "Stable", DEBUG ? "debug" : "release"));
     } else if (action == "exit" || action == "e") { // 'e' is helpful, so the user doesn't think Ctrl-C is the only efficient way to exit
         log("Thanks for stopping by!");
+        log("Tip: itlwm will still be running even after you exit my program.");
         running = false;
         if (refresher.joinable()) refresher.join(); // Wait to exit (so we don't crash)
         screen.Exit();
@@ -270,6 +287,7 @@ int main(int argc, char *argv[]) {
     uint32_t current80211State = 0;
 
     unsigned long iteration = 0; // How many times the refresher thread has iterated
+    unsigned long pastIteration = -1; // Keeping track of "have we already recorded for this iteration?"
     std::string input_str; // What the user has inputted in the command line widget
     auto input = Input(&input_str, "Type 'help' for available commands"); // The input provider for the command line widget
     debug("Starting renderer...");
@@ -338,7 +356,7 @@ int main(int argc, char *argv[]) {
                 if (connected) foundConnected = true;
 
                 std::string ssid(reinterpret_cast<const char*>(network.ssid), strnlen(reinterpret_cast<const char*>(network.ssid), 32)); // fmt is stingy
-                networks_elements.push_back(text(fmt::format("{}. {} ({} RSSI) {} {}", amount + 1, ssid, std::to_string(network.rssi), network.rsn_protos == 0 ? "" : "(locked)", network_ssid_available && connected ? "(connected)" : "")));
+                networks_elements.push_back(text(fmt::format("{}. {} (RSSI {}) {} {}", amount + 1, ssid, std::to_string(network.rssi), network.rsn_protos == 0 ? "" : "(locked)", network_ssid_available && connected ? "(connected)" : "")));
                 amount++;
             }
         }
@@ -347,27 +365,25 @@ int main(int argc, char *argv[]) {
             networks_elements.push_back(text(""));
         }
 
-        auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTime).count();
-
-        if (elapsed >= RSSI_RECORD_INTERVAL) { // Every X milliseconds
-            signalStrengths.push_back(station_info_available ? stationInfo->rssi : 0);
-            lastTime = now;
+        if (iteration % RSSI_RECORD_INTERVAL == 0 && pastIteration != iteration) { // Every X iterations
+            signalRssis.push_back(station_info_available ? stationInfo->rssi : 0);
+            if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
+            pastIteration = iteration;
         }
 
         auto makeGraph = [](int width, int height) -> std::vector<int> {
             std::vector<int> scaled(width, 0);
-            if (signalStrengths.empty()) return scaled; // Empty, we don't have data yet
-            std::vector<int> data(signalStrengths); // Duplicate the list
+            if (signalRssis.empty()) return scaled; // Empty, we don't have data yet
+            std::deque<int16_t> data(signalRssis); // Duplicate the list
             int i;
 
             if (data.size() * BAR_WIDTH > width) { // Truncate the copied list
-                std::vector<int> subvec(data.end() - width / BAR_WIDTH, data.end());
+                std::deque<int16_t> subvec(data.end() - width / BAR_WIDTH, data.end());
                 data = subvec;
             }
 
-            int minRssi = *std::min_element(signalStrengths.begin(), signalStrengths.end()); // Minimum graph point (based on the entire dataset)
-            int maxRssi = *std::max_element(signalStrengths.begin(), signalStrengths.end()); // Maximum graph point (based on the entire dataset)
+            int minRssi = *std::min_element(signalRssis.begin(), signalRssis.end()); // Minimum graph point (based on the entire dataset)
+            int maxRssi = *std::max_element(signalRssis.begin(), signalRssis.end()); // Maximum graph point (based on the entire dataset)
             if (minRssi == maxRssi) maxRssi = minRssi + 1;
 
             size_t padSize = 0;
@@ -390,9 +406,8 @@ int main(int argc, char *argv[]) {
         return vbox({
             // Header
             vbox({
-                text(fmt::format("ItlwmCLI {} by Calebh101", VERSION)) | center,
-                text(fmt::format("Intel Wireless @{}", platformInfo->device_info_str)) | center,
-                text(fmt::format("Powered by itlwm v. {}", platformInfo->driver_info_str)) | center,
+                text(fmt::format("ItlwmCLI {} {} by Calebh101", VERSION, DEBUG ? (BETA ? "Debug (Beta)" : "Debug") : (BETA ? "Beta" : "Release"))) | center, // We tell the user if the program is a beta release, a debug binary, or both
+                text(fmt::format("Powered by itlwm {}", network_platform_info_available ? platformInfo->driver_info_str: "Unknown")) | center,
             }) | border | size(HEIGHT, EQUAL, HEADER_LINES + 2),
             // Body
             hbox({
@@ -400,9 +415,9 @@ int main(int argc, char *argv[]) {
                     // Stats
                     vbox({
                         text(fmt::format("{}, {}", network_power_state_available ? (currentPowerState ? "On" : "Off") : "Unavailable", parse80211State(network_80211_state_available, current80211State))),
-                        text(fmt::format("{} (channel {})", itlPhyModeToString(station_info_available, stationInfo->op_mode), station_info_available ? std::to_string(stationInfo->channel) : "unavailable")),
+                        text(fmt::format("{} @{} (channel {})", itlPhyModeToString(station_info_available, stationInfo->op_mode), network_platform_info_available ? platformInfo->device_info_str : "??", station_info_available ? std::to_string(stationInfo->channel) : "unavailable")),
                         text(fmt::format("Current SSID: {}", network_ssid_available ? currentSsid : "Unavailable")),
-                        text(fmt::format("Signal strength: {} ({})", station_info_available ? std::to_string(stationInfo->rssi) : "Unavailable", rssiStageToString(rssiStage))),
+                        text(fmt::format("RSSI: {} ({})", station_info_available ? std::to_string(stationInfo->rssi) : "Unavailable", rssiStageToString(rssiStage))),
                     }) | border | size(WIDTH, EQUAL, Terminal::Size().dimx / 2) | size(HEIGHT, EQUAL, 6),
                     // Graph showing signal strengths
                     hbox({
@@ -457,6 +472,7 @@ int main(int argc, char *argv[]) {
             while (running) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(CONSTANT_REFRESH_INTERVAL));
                 screen.PostEvent(Event::Custom);
+                iteration++;
             }
         });
     }
