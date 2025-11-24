@@ -1,5 +1,7 @@
 // ItlwmCLI main.cpp
 // Copyright 2025 by Calebh101
+//
+// This file contains the entire source code for ItlwmCLI.
 
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/image.hpp>
@@ -14,17 +16,17 @@
 #include <fmt/format.h>
 #include <fstream>
 #include <filesystem>
+#include "json.hpp"
 
-#define VERSION "0.0.0A"                 // Version of the app.
+#define VERSION "0.0.0B"                 // Version of the app.
 #define BETA true                        // If the app is in beta.
 
-#define ENABLE_SETTINGS false            // Whether to use and store settings.
 #define MAX_RSSI_RECORD_LENGTH 10000     // The max length of the RSSI list. After this, new values added chop off the old values.
 #define CONSTANT_REFRESH_INTERVAL 50     // How many milliseconds the UI should wait to refresh (<= 0 to disable). Must be a factor of 1000.
 #define RSSI_RECORD_INTERVAL 5           // How many iterations (CONSTANT_REFRESH_INTERVAL) to wait before the RSSI value should be recorded. The actual interval would be (CONSTANT_REFRESH_INTERVAL * RSSI_RECORD_INTERVAL) milliseconds.
 
 #define HEADER_LINES 2                   // How many lines the header is.
-#define VISIBLE_LOG_LINES 4              // How many lines are used for the command line widget.
+#define VISIBLE_LOG_LINES 6              // How many lines are used for the command line widget.
 #define VISIBLE_NETWORKS 20              // How many networks should be visible.
 #define BAR_WIDTH 2                      // How wide the bars for the real-time signal graph should be.
 #define TAB_MULTIPLIER 4                 // How many spaces a tab is in the command line widget.
@@ -37,15 +39,20 @@
     #define DEBUG false
 #endif
 
-// I don't wanna have to write 'ftxui::' like 30 times
 using namespace ftxui;
+using json = nlohmann::json;
 
 auto screen = ScreenInteractive::TerminalOutput();
 std::vector<std::string> output; // Logs
 std::deque<int16_t> signalRssis; // Signal strengths recorded (for graphs)
-int positionAway = 0; // How far we have scrolled up in the command line
+int positionAway = 0; // How far we have scrolled up in the command line widget
+int logScrolledLeft = 0; // How far we've scrolled right in the command line
 bool running = false; // If the UI update thread should run
+bool showSaveSettingsPrompt = true; // If we should ask to save a settings file (if it doesn't already exist)
 std::thread refresher; // The UI update thread
+std::filesystem::path exec; // Parent directory of the executable
+std::filesystem::path settingsfile; // The file path containing our settings (potentially)
+json settings; // Our global settings.
 
 enum rssi_stage {
     rssi_stage_excellent,
@@ -114,6 +121,12 @@ std::string parse80211State(bool valid, uint32_t state) {
     }
 }
 
+// Custom debug function, it just prints to the terminal. We shouldn't use this when the GUI is running.
+template <typename... Args>
+void debug(const std::string& input, Args&&... args) {
+    std::cout << "ItlwmCLI: " << fmt::format(input, std::forward<Args>(args)...) << std::endl;
+}
+
 // Add to command line widget logs ('output')
 void log(std::string input) {
     if (positionAway != 0) positionAway++; // If we're not following the logs, then scroll even farther away from them to stay where we are now
@@ -124,6 +137,57 @@ void log(std::string input) {
 void log(int indent, std::string input) {
     std::string spaces(indent * TAB_MULTIPLIER, ' ');
     return log(fmt::format("{}{}", spaces, input));
+}
+
+json loadSettings() {
+    if (std::filesystem::exists(settingsfile)) {
+        std::ifstream in(settingsfile);
+
+        if (in.is_open()) {
+            std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            in.close();
+            
+            try {
+                return json::parse(content);
+            } catch (...) {
+                debug("Failed to read settings file: invalid JSON (ignoring)");
+                return json();
+            }
+        } else {
+            debug("Failed to read settings file: {}", settingsfile.string());
+            exit(1);
+        }
+    } else {
+        return json();
+    }
+}
+
+// Helper function so I don't have to duplicate my code
+bool _saveSettings(json& settings) {
+    std::ofstream out(settingsfile);
+
+    if (out.is_open()) {
+        out << settings.dump();
+        out.close();
+        return true;
+    } else {
+        log(fmt::format("Failed to write to settings file: {}", settingsfile.string()));
+        return false;
+    }
+}
+
+bool saveSettings(json& settings) {
+    if (std::filesystem::exists(settingsfile)) {
+        return _saveSettings(settings);
+    } else {
+        if (showSaveSettingsPrompt) {
+            log("Unable to save to settings file; we don't know if you want to. Do note that all settings are stored in plain text (even passwords).");
+            log(1, "To allow saving to a settings file, run:     settings file allow");
+            log(1, "To hide this message, run:                   settings file deny");
+        }
+
+        return false;
+    }
 }
 
 std::vector<std::string> parseCommand(const std::string& input) {
@@ -142,17 +206,6 @@ std::vector<std::string> parseCommand(const std::string& input) {
     return args;
 }
 
-void usage() {
-    log("Usage:");
-    log(1, "help                                Print this help message.");
-    log(1, "about                               Show info about ItlwmCLI.");
-    log(1, "exit / e                            Peacefully exit my tool.");
-    log(1, "power [status]                      Turn WiFi on or off. 'status' can be 'on' or 'off'.");
-    log(1, "connect [ssid] [password]           Connect to a WiFi network.");
-    log(1, "associate [ssid] [password]         Associate a WiFi network.");
-    log(1, "disassociate [ssid]                 Disassociate a WiFi network.");
-}
-
 inline void trim(std::string& s) {
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
         return !std::isspace(ch);
@@ -163,13 +216,51 @@ inline void trim(std::string& s) {
     }).base(), s.end()); // Remove trailing whitespace
 }
 
+template <typename T>
+T atOrDefault(std::vector<T>& input, int i, T _default) {
+    if (i < input.size()) return input[i];
+    return _default;
+}
+
+template <typename T>
+std::optional<T> atOrNull(std::vector<T>& input, int i) {
+    if (i < input.size()) return input[i];
+    return std::nullopt;
+}
+
+void usage(std::string command = "") {
+    if (command == "settings") {
+        log("settings Usage:");
+        log(1, "settings help                       Print this help message.");
+        log(1, "settings clear                      Delete the app's settings file.");
+        log(1, "settings file [status]              Decide if you want to allow saving a settings file or not. If a settings file already exists, this is not necessary. 'status' can be 'allow' or 'deny'.");
+    } else if (command == "save") {
+        log("save Usage:");
+        log(1, "save help                           Print this help message.");
+        log(1, "save password [SSID] [password]     Save a password for a WiFi network, for use later.");
+    } else if (command.empty()) {
+        log("Usage:");
+        log(1, "help [command]                      Print this help message, or optionally the help message of a different command.");
+        log(1, "about                               Show info about ItlwmCLI.");
+        log(1, "exit / e                            Peacefully exit my tool.");
+        log(1, "power [status]                      Turn WiFi on or off. 'status' can be 'on' or 'off'.");
+        log(1, "connect [ssid] [password]           Connect to a WiFi network.");
+        log(1, "associate [ssid] [password]         Associate a WiFi network.");
+        log(1, "disassociate [ssid]                 Disassociate a WiFi network.");
+        log(1, "save [subcommand]                   Save something for use later.");
+        log(1, "settings [subcommand]               Manage settings.");
+    } else {
+        log(fmt::format("Invalid command: {}", command));
+    }
+}
+
 bool processCommand(std::string input) {
     trim(input);
-    auto command = parseCommand(input);
-    auto action = command[0]; // The thing the user is trying to do
+    auto command = parseCommand(input); // The full list of arguments
+    auto action = command[0]; // The thing the user is trying to do, the first argument
 
     if (action == "help") {
-        usage();
+        usage(atOrDefault(command, 1, std::string("")));
     } else if (action == "about") {
         log("ItlwmCLI by Calebh101");
         log(1, fmt::format("Version: {}", VERSION));
@@ -201,24 +292,24 @@ bool processCommand(std::string input) {
             log("Command 'power' needs 1 argument.");
         }
     } else if (action == "connect") {
-        if (command.size() >= 3) {
+        if (command.size() >= 2) {
             const std::string ssid = command[1];
-            const std::string pswd = command[2];
+            const std::string pswd = atOrDefault(command, 2, settings["savedPasswords"].value(ssid, "")); // Try to get the 3rd argument, then try to get the saved password, then default to empty
 
             connect_network(ssid.c_str(), pswd.c_str());
             log(fmt::format("Connecting to network '{}' with password '{}'...", ssid, pswd));
         } else {
-            log("Command 'connect' needs 2 arguments.");
+            log("Command 'connect' needs 1-2 arguments.");
         }
     } else if (action == "associate") {
-        if (command.size() >= 3) {
+        if (command.size() >= 2) {
             const std::string ssid = command[1];
-            const std::string pswd = command[2];
+            const std::string pswd = atOrDefault(command, 2, settings["savedPasswords"].value(ssid, "")); // Try to get the 3rd argument, then try to get the saved password, then default to empty
 
             associate_ssid(ssid.c_str(), pswd.c_str());
             log(fmt::format("Associating network '{}' with password '{}'...", ssid, pswd));
         } else {
-            log("Command 'associate' needs 2 arguments.");
+            log("Command 'associate' needs 1-2 arguments.");
         }
     } else if (action == "disassociate") {
         if (command.size() >= 2) {
@@ -228,6 +319,51 @@ bool processCommand(std::string input) {
         } else {
             log("Command 'disassociate' needs 1 argument.");
         }
+    } else if (action == "save") {
+        std::optional<std::string> subcommand = atOrNull(command, 1);
+
+        if (subcommand == "help") {
+            usage("save");
+        } else if (subcommand == "password") {
+            std::optional<std::string> ssid = atOrNull(command, 2);
+            std::optional<std::string> pswd = atOrNull(command, 3);
+
+            if (ssid == std::nullopt || pswd == std::nullopt) {
+                log("Please provide both an SSID and a password.");
+                return true;
+            }
+
+            settings["savedPasswords"][*ssid] = pswd;
+            bool saved = saveSettings(settings);
+            log(fmt::format("Saved SSID '{}' with password '{}'!", ssid.value_or("<unknown>"), pswd.value_or("<unknown>")));
+        }
+    } else if (action == "settings") {
+        std::optional<std::string> subcommand = atOrNull(command, 1);
+
+        if (subcommand == "help") {
+            usage("settings");
+        } else if (subcommand == "file") {
+            std::optional<std::string> status = atOrNull(command, 2);
+
+            if (status == "allow") {
+                showSaveSettingsPrompt = false;
+                _saveSettings(settings);
+                log("Saved settings!");
+            } else if (status == "decline") {
+                showSaveSettingsPrompt = false;
+                log("Declined to save settings.");
+            } else {
+                log("Please input a valid status.");
+            }
+        } else if (subcommand == "clear") {
+            if (std::filesystem::exists(settingsfile) && std::remove(std::filesystem::absolute(settingsfile).c_str()) == 0) {
+                log(fmt::format("Settings file at {} removed.", std::filesystem::absolute(settingsfile).string()));
+            } else {
+                log(fmt::format("Unable to remove settings file at {}. (Does it exist?)", std::filesystem::absolute(settingsfile).string()));
+            }
+        } else {
+            log("subcommand not found. (To see all subcommands, use 'settings help'.)");
+        }
     } else {
         return false;
     }
@@ -235,51 +371,23 @@ bool processCommand(std::string input) {
     return true; // So we don't have to specify return true in each command, it's just caught in overflow
 }
 
-// For sorting
+// For sorting networks by RSSI
 bool compareNetworkStrength(const ioctl_network_info& a, const ioctl_network_info& b) {
     return abs(a.rssi) < abs(b.rssi);
 }
 
-// Custom debug function
-template <typename... Args>
-void debug(const std::string& input, Args&&... args) {
-    std::cout << "ItlwmCLI: " << fmt::format(input, std::forward<Args>(args)...) << std::endl;
-}
-
 int main(int argc, char *argv[]) {
     #ifndef __APPLE__
-        debug("This program requires macOS to run.") // No Timmy, this doesn't work on Windows
+        debug("This program requires macOS to run.") // No Timmy, this doesn't work on Windows 11
     #endif
 
     debug("Starting app...");
-    std::filesystem::path exec = std::filesystem::absolute(argv[0]).parent_path();
-    std::filesystem::path settingsfile = exec / "ItlwmCLI.settings.json"; // File for settings
-
-    if (ENABLE_SETTINGS) {
-        if (!std::filesystem::exists(settingsfile)) {
-            std::ofstream out(settingsfile);
-            if (out.is_open()) {
-                out << "{}"; // Default JSON
-                out.close();
-            } else {
-                debug("Failed to create settings file: {}", settingsfile.string());
-                exit(1);
-            }
-        }
-
-        std::ifstream in(settingsfile);
-
-        if (in.is_open()) {
-            std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-            in.close();
-        } else {
-            debug("Failed to read settings file: {}", settingsfile.string());
-            exit(1);
-        }
-    }
+    exec = std::filesystem::absolute(argv[0]).parent_path();
+    settingsfile = exec / "ItlwmCLI.settings.json"; // File for settings
 
     // We finally get to the good stuff
     debug("Loading application...");
+    settings = loadSettings();
 
     // Initialize all of itlwm's blah
     network_info_list_t* networks = new network_info_list_t;
@@ -293,8 +401,8 @@ int main(int argc, char *argv[]) {
     unsigned long iteration = 0; // How many times the refresher thread has iterated
     unsigned long pastIteration = -1; // Keeping track of "have we already recorded for this iteration?"
     std::string input_str; // What the user has inputted in the command line widget
-    auto input = Input(&input_str, "Type 'help' for available commands"); // The input provider for the command line widget
-    debug("Starting renderer...");
+    auto input = Input(&input_str, "Type 'help' for available commands. Use up/down to scroll."); // The input provider for the command line widget
+    debug("Loading renderer...");
 
     auto renderer = Renderer([&] {
         Elements output_elements;
@@ -308,7 +416,7 @@ int main(int argc, char *argv[]) {
             std::string index = std::to_string(i + 1);
             std::string spaces = "";
             while (index.size() + spaces.size() < LOG_INDEX_PADDING) spaces += " "; // Pad so the line numbers line up correctly
-            output_elements.push_back(text(fmt::format("{}{}.   {}", spaces, index, output[i])));
+            output_elements.push_back(text(fmt::format("{}{}.   {}", spaces, index, output[i].size() > logScrolledLeft ? output[i].substr(logScrolledLeft) : "")));
         }
 
         while (output_elements.size() < VISIBLE_LOG_LINES) { // Pad with blanks to keep FTXUI consistent
@@ -324,20 +432,14 @@ int main(int argc, char *argv[]) {
         bool network_list_available = get_network_list(networks);
         bool station_info_available = get_station_info(stationInfo);
 
-        // Reset the cache if the WiFi is off
+        // If the WiFi is off, then everything should be off
         if (network_power_state_available == false || currentPowerState == false) {
-            memset(currentSsid, 0, sizeof(currentSsid));
-            memset(currentBssid, 0, sizeof(currentBssid));
-            if (platformInfo) memset(platformInfo, 0, sizeof(*platformInfo));
-
-            if (networks) {
-                memset(networks, 0, sizeof(*networks));
-                memset(networks->networks, 0, sizeof(networks->networks));
-                networks->count = 0;
-            }
-
-            if (stationInfo) memset(stationInfo, 0, sizeof(*stationInfo));
-            current80211State = 0;
+            network_ssid_available = false;
+            network_bssid_available = false;
+            network_80211_state_available = false;
+            network_platform_info_available = false;
+            network_list_available = false;
+            station_info_available = false;
         }
 
         // So uh, station_info_available is always false for some reason, so we're using a different method
@@ -375,7 +477,7 @@ int main(int argc, char *argv[]) {
             pastIteration = iteration;
         }
 
-        auto makeGraph = [](int width, int height) -> std::vector<int> {
+        auto makeGraph = [station_info_available](int width, int height) -> std::vector<int> {
             std::vector<int> scaled(width, 0);
             if (signalRssis.empty()) return scaled; // Empty, we don't have data yet
             std::deque<int16_t> data(signalRssis); // Duplicate the list
@@ -396,6 +498,7 @@ int main(int argc, char *argv[]) {
             for (size_t i = 0; i < data.size(); ++i) {
                 int rssi = data[i];
                 int y = (rssi - minRssi) * height / (maxRssi - minRssi); // Make it relative
+                if (!station_info_available) y = 0;
 
                 for (size_t j = 0; j < BAR_WIDTH; ++j) { // Make X points, for however wide we want the bars
                     if (padSize + i * BAR_WIDTH + j < scaled.size()) {
@@ -449,9 +552,14 @@ int main(int argc, char *argv[]) {
             std::string input(input_str); // Make a copy
             input_str.clear();
             positionAway = 0; // Make sure to scroll down
+            logScrolledLeft = 0; // Also make sure to scroll back to the right
             screen.PostEvent(Event::Custom); // Update UI
-            bool valid = processCommand(input);
-            if (!valid) log("Invalid command: " + input);
+            
+            std::thread([input]() { // Don't block
+                bool valid = processCommand(input);
+                if (!valid) log("Invalid command: " + input);
+            }).detach();
+
             return true;
         } else if (event == Event::ArrowUp) { // Scroll up
             if (positionAway < output.size() - VISIBLE_LOG_LINES) {
@@ -461,28 +569,37 @@ int main(int argc, char *argv[]) {
             if (positionAway > 0) {
                 positionAway--;
             }
+        } else if (event == Event::ArrowRight) { // Scroll left
+            logScrolledLeft++;
+        } else if (event == Event::ArrowLeft) { // Scroll left
+            if (logScrolledLeft > 0) {
+                logScrolledLeft--;
+            }
         }
 
         if (input->OnEvent(event)) return true;
         return false;
     });
 
-    running = true;
-
     if (CONSTANT_REFRESH_INTERVAL > 0) {
         debug("Allowing constant refresh...");
 
         refresher = std::thread([&] {
-            while (running) {
+            while (true) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(CONSTANT_REFRESH_INTERVAL));
-                screen.PostEvent(Event::Custom);
-                iteration++;
+
+                if (running) {
+                    screen.PostEvent(Event::Custom);
+                    iteration++;
+                }
             }
         });
     }
 
     debug("Starting application...");
+    if (refresher.joinable()) refresher.detach();
     std::system("clear");
+    running = true;
     screen.Loop(interactive);
     running = false;
     return 0;

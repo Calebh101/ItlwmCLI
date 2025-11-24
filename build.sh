@@ -11,6 +11,8 @@ ARCH="$(uname -m)"           # What architecture to build for
 BUILD_WITHOUT_VERSION=false  # -v
 NO_BUILD_PACKAGES=false      # -p
 
+OPTIONS_STRING_RAW=""
+
 while getopts "vf:" opt; do
     case $opt in
         v) BUILD_WITHOUT_VERSION=true ;;
@@ -20,7 +22,16 @@ while getopts "vf:" opt; do
             exit 1
             ;;
     esac
+
+    OPTIONS_STRING_RAW+="$opt"
 done
+
+
+if [[ -n "$OPTIONS_STRING_RAW" ]]; then
+    OPTIONS_STRING="-$OPTIONS_STRING_RAW"
+else
+    OPTIONS_STRING=""
+fi
 
 # Remove options from positional arguments
 shift $((OPTIND - 1))
@@ -35,8 +46,14 @@ case "$BUILD_TYPE" in
     Release|release)
         BUILD_TYPE="Release"
         ;;
+    All|all)
+        echo "Building for both debug and release..."
+        "${BASH_SOURCE[0]}" $OPTIONS_STRING "debug" "$VERSION"
+        "${BASH_SOURCE[0]}" $OPTIONS_STRING "release" "$VERSION"
+        exit 0
+        ;;
     *)
-        echo "Unknown build type: $BUILD_TYPE (choose debug or release)"
+        echo "Unknown build type: $BUILD_TYPE (choose debug or release, or all)"
         exit 1
         ;;
 esac
@@ -56,7 +73,7 @@ fi
 REL_FLAG="__$(echo "$BUILD_TYPE" | tr '[:lower:]' '[:upper:]')" # main.cpp relies on '__DEBUG' being present to determine debug mode.
 echo "Building for $BUILD_TYPE in $BUILD_DIR using generator: $GENERATOR (release flag: $REL_FLAG)"
 
-cmake -S "$ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_GENERATOR="$GENERATOR" -DCMAKE_COLOR_DIAGNOSTICS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 -DCMAKE_CXX_FLAGS="$CXX_FLAGS -D$REL_FLAG -DCMAKE_EXE_LINKER_FLAGS=\"$ROOT/lib/libc++.a $ROOT/lib/libc++abi.a\""
+cmake -S "$ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_GENERATOR="$GENERATOR" -DCMAKE_COLOR_DIAGNOSTICS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 -DCMAKE_CXX_FLAGS="$CXX_FLAGS -D$REL_FLAG -DCMAKE_EXE_LINKER_FLAGS=\"$ROOT/lib/libc++.a $ROOT/lib/libc++abi.a\"" -Wno-dev
 cmake --build "$BUILD_DIR" --target all
 
 if [[ "$NO_BUILD_PACKAGES" == "false" ]]; then
@@ -79,3 +96,6 @@ if [[ "$NO_BUILD_PACKAGES" == "false" ]]; then
     echo "Building package archive with version ${VERSION:-null} and name $PKG_NAME..."
     zip -rj "$ROOT/build/$PKG_NAME" "$PKG_DIR" # Zip up the files into an archive
 fi
+
+echo ""
+echo "Job complete! Make sure that VERSION and BETA are correctly set in main.cpp!"

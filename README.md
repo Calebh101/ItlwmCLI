@@ -10,8 +10,7 @@ To open it, simply run the binary. You can double-click it from Finder, or use t
 
 # Compatibility
 
-- macOS Catalina to macOS Tahoe
-- A 64-bit CPU
+- macOS Catalina to macOS Tahoe (64-bit)
 - itlwm (**not** AirportItlwm)
 
 # How to Use
@@ -28,7 +27,7 @@ The bottom left is a graph that streams your RSSI values. A higher value means a
 
 The right section lists all networks detected by itlwm. It shows the SSID and the RSSI (see below). It'll also show `(locked)` if the network has security and `(connected)` if you're already connected to it.
 
-The bottom section is the command line of this. You type your command and press enter. All arguments are positional, and can be surrounded by either single quotes (`'`) or double quotes (`"`). To start, try `help` to display more commands. In this command line, you can't go back to previously-used commands (maybe some day), but up/down scrolls you in the terminal logs.
+The bottom section is the command line of this. You type your command and press enter. All arguments are positional, and can be surrounded by either single quotes (`'`) or double quotes (`"`). To start, try `help` to display more commands. In this command line, you can't go back to previously-used commands (maybe some day), but up/down scrolls you in the terminal logs. Left/right also scrolls you, well, left and right.
 
 **Note**: To exit this app quickly, you can just type `e` and press enter (it's the same thing as typing `exit`), and you don't just immediately terminate it!
 
@@ -37,12 +36,6 @@ That should be all, hope you enjoy!
 # Index
 
 - RSSI is a way to measure signal strength, and it's always negative. The closer it is to 0, the better your connection is. If it's super far *away* from 0 (like -90), that WiFi connection is *not* good. Typically -30 to -50 is really good, and -80 to -90 is really bad.
-
-# Changelog
-
-## 0.0.0A
-
-Initial beta.
 
 # Compiling Yourself
 
