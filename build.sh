@@ -52,7 +52,7 @@ if [[ -z "$VERSION" && "$BUILD_TYPE" == "Release" ]]; then
     exit 1
 fi
 
-PKG_NAME="ItlwmCLI-$ARCH-${VERSION:-UNKNOWN}-$BUILD_TYPE.zip"
+PKG_NAME="ItlwmCLI-macOS-$ARCH-${VERSION:-UNKNOWN}-$BUILD_TYPE.zip"
 [ -f "$PKG_NAME" ] && rm "$PKG_NAME"
-echo "Building package archive with version ${VERSION:-UNKNOWN} name $PKG_NAME..."
+echo "Building package archive with version ${VERSION:-UNKNOWN} and name $PKG_NAME..."
 zip -rj "$ROOT/build/$PKG_NAME" "$PKG_DIR"

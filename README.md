@@ -8,6 +8,11 @@ This tool also works in macOS Recovery, even though HeliPort does not. You just 
 
 To open it, simply run the binary. You can double-click it from Finder, or use the command line to start it.
 
+# Compatibility
+
+- macOS
+- itlwm (**not** AirportItlwm)
+
 # How to Use
 
 ItlwmCLI may *look* complex at first, but it's really not.

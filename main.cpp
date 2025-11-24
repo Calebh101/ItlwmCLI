@@ -247,6 +247,10 @@ void debug(const std::string& input, Args&&... args) {
 }
 
 int main(int argc, char *argv[]) {
+    #ifndef __APPLE__
+        debug("This program requires macOS to run.") // No Timmy, this doesn't work on Windows
+    #endif
+
     debug("Starting app...");
     std::filesystem::path exec = std::filesystem::absolute(argv[0]).parent_path();
     std::filesystem::path settingsfile = exec / "ItlwmCLI.settings.json"; // File for settings
