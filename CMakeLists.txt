@@ -9,17 +9,24 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
-
-list(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/ftxui")
-find_package(ftxui REQUIRED)
+list(APPEND CMAKE_PREFIX_PATH "${SMAKE_CURRENT_SOURCE_DIR}/lib")
 set_source_files_properties(HeliPort/ClientKit/Api.c PROPERTIES LANGUAGE C)
 
 find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
 if(NOT COREFOUNDATION_FRAMEWORK)
     message(FATAL_ERROR "CoreFoundation framework not found")
 endif()
+
+find_library(IOKIT_FRAMEWORK IOKit)
+if(NOT IOKIT_FRAMEWORK)
+    message(FATAL_ERROR "IOKit framework not found")
+endif()
+
+set(FMT_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
+find_package(fmt REQUIRED)
+
+set(FTXUI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+find_package(ftxui REQUIRED)
 
 add_executable(ItlwmCLI
     main.cpp
@@ -30,17 +37,17 @@ add_executable(ItlwmCLI
 
 target_include_directories(ItlwmCLI
     PRIVATE
-    /usr/local/include
-    /usr/local/opt
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/HeliPort/ClientKit
 )
 
 target_link_libraries(ItlwmCLI
     PRIVATE
-    Qt${QT_VERSION_MAJOR}::Core
-    ftxui::screen
-    ftxui::dom
-    ftxui::component
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/libfmt.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/libftxui-screen.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/libftxui-dom.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/libftxui-component.a
+    ${IOKIT_FRAMEWORK}
     ${COREFOUNDATION_FRAMEWORK}
 )
 
