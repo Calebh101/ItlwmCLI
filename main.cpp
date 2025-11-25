@@ -518,7 +518,7 @@ int main(int argc, char *argv[]) {
             networks_elements.push_back(text(""));
         }
 
-        if (rssi_available ? iteration % RSSI_RECORD_INTERVAL == 0 && pastIteration != iteration) { // Every X iterations
+        if (rssi_available && iteration % RSSI_RECORD_INTERVAL == 0 && pastIteration != iteration) { // Every X iterations
             signalRssis.push_back(rssi_available ? stationInfo->rssi : RSSI_UNAVAILABLE_THRESHOLD);
             if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
             pastIteration = iteration;
