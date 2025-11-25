@@ -231,24 +231,24 @@ std::optional<T> atOrNull(std::vector<T>& input, int i) {
 void usage(std::string command = "") {
     if (command == "settings") {
         log("settings Usage:");
-        log(1, "settings help                       Print this help message.");
-        log(1, "settings clear                      Delete the app's settings file.");
-        log(1, "settings file [status]              Decide if you want to allow saving a settings file or not. If a settings file already exists, this is not necessary. 'status' can be 'allow' or 'deny'.");
+        log(1, "settings help                             Print this help message.");
+        log(1, "settings clear                            Delete the app's settings file.");
+        log(1, "settings file [status]                    Decide if you want to allow saving a settings file or not. If a settings file already exists, this is not necessary. 'status' can be 'allow' or 'deny'.");
     } else if (command == "save") {
-        log("save Usage:");
-        log(1, "save help                           Print this help message.");
-        log(1, "save password [SSID] [password]     Save a password for a WiFi network, for use later.");
+        log("save/unsave Usage:");
+        log(1, "save/unsave help                          Print this help message.");
+        log(1, "save/unsace password [SSID] [password]    Save a password for a WiFi network, for use later.");
     } else if (command.empty()) {
         log("Usage:");
-        log(1, "help [command]                      Print this help message, or optionally the help message of a different command.");
-        log(1, "about                               Show info about ItlwmCLI.");
-        log(1, "exit / e                            Peacefully exit my tool.");
-        log(1, "power [status]                      Turn WiFi on or off. 'status' can be 'on' or 'off'.");
-        log(1, "connect [ssid] [password]           Connect to a WiFi network.");
-        log(1, "associate [ssid] [password]         Associate a WiFi network.");
-        log(1, "disassociate [ssid]                 Disassociate a WiFi network.");
-        log(1, "save [subcommand]                   Save something for use later.");
-        log(1, "settings [subcommand]               Manage settings.");
+        log(1, "help [command]                            Print this help message, or optionally the help message of a different command.");
+        log(1, "about                                     Show info about ItlwmCLI.");
+        log(1, "exit/e                                    Peacefully exit my tool.");
+        log(1, "power [status]                            Turn WiFi on or off. 'status' can be 'on' or 'off'.");
+        log(1, "connect [ssid] [password]                 Connect to a WiFi network.");
+        log(1, "associate [ssid] [password]               Associate a WiFi network, or make it known to itlwm.");
+        log(1, "disassociate [ssid]                       Disassociate a WiFi network.");
+        log(1, "save [subcommand]                         Save something for use later.");
+        log(1, "settings [subcommand]                     Manage settings.");
     } else {
         log(fmt::format("Invalid command: {}", command));
     }
@@ -336,6 +336,35 @@ bool processCommand(std::string input) {
             settings["savedPasswords"][*ssid] = pswd;
             bool saved = saveSettings(settings);
             log(fmt::format("Saved SSID '{}' with password '{}'!", ssid.value_or("<unknown>"), pswd.value_or("<unknown>")));
+        } else if (subcommand == std::nullopt) {
+            log("A subcommand is required. (Run 'save help' for valid subcommands)");
+        } else {
+            log(fmt::format("Invalid subcommand: {} (run 'save help' for valid subcommands)", subcommand.value_or("<unknown>")));
+        }
+    } else if (action == "unsave") {
+        std::optional<std::string> subcommand = atOrNull(command, 1);
+
+        if (subcommand == "help") {
+            usage("unsave");
+        } else if (subcommand == "password") {
+            std::optional<std::string> ssid = atOrNull(command, 2);
+
+            if (ssid == std::nullopt) {
+                log("Please provide ab SSID.");
+                return true;
+            }
+
+            if (settings["savedPasswords"].contains(ssid.value_or(""))) {
+                settings["savedPasswords"].erase(ssid.value_or(""));
+                bool saved = saveSettings(settings);
+                log(fmt::format("Unsaved SSID '{}'!", ssid.value_or("<unknown>")));
+            } else {
+                log("Provided SSID doesn't have a password saved.");
+            }
+        } else if (subcommand == std::nullopt) {
+            log("A subcommand is required. (Run 'unsave help' for valid subcommands)");
+        } else {
+            log(fmt::format("Invalid subcommand: {} (run 'unsave help' for valid subcommands)", subcommand.value_or("<unknown>")));
         }
     } else if (action == "settings") {
         std::optional<std::string> subcommand = atOrNull(command, 1);
@@ -361,9 +390,13 @@ bool processCommand(std::string input) {
             } else {
                 log(fmt::format("Unable to remove settings file at {}. (Does it exist?)", std::filesystem::absolute(settingsfile).string()));
             }
+        } else if (subcommand == std::nullopt) {
+            log("A subcommand is required. (Run 'settings help' for valid subcommands)");
         } else {
-            log("subcommand not found. (To see all subcommands, use 'settings help'.)");
+            log(fmt::format("Invalid subcommand: {} (run 'settings help' for valid subcommands)", subcommand.value_or("<unknown>")));
         }
+    } else if (action == "save/unsave") {
+        log("No silly, I meant either 'save' or 'unsave'");
     } else {
         return false;
     }
@@ -423,6 +456,9 @@ int main(int argc, char *argv[]) {
             output_elements.insert(output_elements.begin(), text(""));
         }
 
+        std::memset(currentSsid, 0, sizeof(currentSsid));
+        std::memset(currentBssid, 0, sizeof(currentBssid));
+
         // Query itlwm
         bool network_ssid_available = get_network_ssid(currentSsid);
         bool network_bssid_available = get_network_bssid(currentBssid);
@@ -431,6 +467,9 @@ int main(int argc, char *argv[]) {
         bool network_platform_info_available = get_platform_info(platformInfo);
         bool network_list_available = get_network_list(networks);
         bool station_info_available = get_station_info(stationInfo);
+
+        // So uh, station_info_available is always false for some reason, so we're using a different method
+        station_info_available = stationInfo ? true : false;
 
         // If the WiFi is off, then everything should be off
         if (network_power_state_available == false || currentPowerState == false) {
@@ -442,8 +481,6 @@ int main(int argc, char *argv[]) {
             station_info_available = false;
         }
 
-        // So uh, station_info_available is always false for some reason, so we're using a different method
-        station_info_available = stationInfo ? true : false;
         rssi_stage rssiStage = rssiToRssiStage(station_info_available, stationInfo ? stationInfo->rssi : 0);
 
         if (network_list_available) {
@@ -472,7 +509,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (iteration % RSSI_RECORD_INTERVAL == 0 && pastIteration != iteration) { // Every X iterations
-            signalRssis.push_back(station_info_available ? stationInfo->rssi : 0);
+            signalRssis.push_back(station_info_available ? stationInfo->rssi : -200);
             if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
             pastIteration = iteration;
         }
@@ -498,7 +535,7 @@ int main(int argc, char *argv[]) {
             for (size_t i = 0; i < data.size(); ++i) {
                 int rssi = data[i];
                 int y = (rssi - minRssi) * height / (maxRssi - minRssi); // Make it relative
-                if (!station_info_available) y = 0;
+                if (rssi <= -200) y = 0;
 
                 for (size_t j = 0; j < BAR_WIDTH; ++j) { // Make X points, for however wide we want the bars
                     if (padSize + i * BAR_WIDTH + j < scaled.size()) {
@@ -602,5 +639,6 @@ int main(int argc, char *argv[]) {
     running = true;
     screen.Loop(interactive);
     running = false;
+    api_terminate();
     return 0;
 }
