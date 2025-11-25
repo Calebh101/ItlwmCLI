@@ -17,6 +17,7 @@
 #include <fstream>
 #include <filesystem>
 #include "json.hpp"
+#include "filesystem.hpp"
 
 #define VERSION "0.0.0B"                 // Version of the app.
 #define BETA true                        // If the app is in beta.
@@ -43,6 +44,7 @@
 #endif
 
 using namespace ftxui;
+using fs = ghc::filesystem;
 using json = nlohmann::json;
 
 auto screen = ScreenInteractive::TerminalOutput();
@@ -53,8 +55,8 @@ int logScrolledLeft = 0; // How far we've scrolled right in the command line
 bool running = false; // If the UI update thread should run
 bool showSaveSettingsPrompt = true; // If we should ask to save a settings file (if it doesn't already exist)
 std::thread refresher; // The UI update thread
-std::filesystem::path exec; // Parent directory of the executable
-std::filesystem::path settingsfile; // The file path containing our settings (potentially)
+fs::path exec; // Parent directory of the executable
+fs::path settingsfile; // The file path containing our settings (potentially)
 json settings; // Our global settings.
 
 enum rssi_stage {
@@ -143,7 +145,7 @@ void log(int indent, std::string input) {
 }
 
 json loadSettings() {
-    if (std::filesystem::exists(settingsfile)) {
+    if (fs::exists(settingsfile)) {
         std::ifstream in(settingsfile);
 
         if (in.is_open()) {
@@ -180,7 +182,7 @@ bool _saveSettings(json& settings) {
 }
 
 bool saveSettings(json& settings) {
-    if (std::filesystem::exists(settingsfile)) {
+    if (fs::exists(settingsfile)) {
         return _saveSettings(settings);
     } else {
         if (showSaveSettingsPrompt) {
@@ -390,10 +392,10 @@ bool processCommand(std::string input) {
                 log("Please input a valid status.");
             }
         } else if (subcommand == "clear") {
-            if (std::filesystem::exists(settingsfile) && std::remove(std::filesystem::absolute(settingsfile).c_str()) == 0) {
-                log(fmt::format("Settings file at {} removed.", std::filesystem::absolute(settingsfile).string()));
+            if (fs::exists(settingsfile) && std::remove(fs::absolute(settingsfile).c_str()) == 0) {
+                log(fmt::format("Settings file at {} removed.", fs::absolute(settingsfile).string()));
             } else {
-                log(fmt::format("Unable to remove settings file at {}. (Does it exist?)", std::filesystem::absolute(settingsfile).string()));
+                log(fmt::format("Unable to remove settings file at {}. (Does it exist?)", fs::absolute(settingsfile).string()));
             }
         } else if (subcommand == std::nullopt) {
             log("A subcommand is required. (Run 'settings help' for valid subcommands)");
@@ -420,7 +422,7 @@ int main(int argc, char *argv[]) {
     #endif
 
     debug("Starting app...");
-    exec = std::filesystem::absolute(argv[0]).parent_path();
+    exec = fs::absolute(argv[0]).parent_path();
     settingsfile = exec / "ItlwmCLI.settings.json"; // File for settings
 
     // We finally get to the good stuff

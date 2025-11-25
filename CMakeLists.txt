@@ -33,6 +33,7 @@ add_executable(ItlwmCLI
     HeliPort/ClientKit/Api.c
     Api.h
     json.hpp
+    filesystem.hpp
 )
 
 target_include_directories(ItlwmCLI
