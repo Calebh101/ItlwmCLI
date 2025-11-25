@@ -182,8 +182,7 @@ bool saveSettings(json& settings) {
     } else {
         if (showSaveSettingsPrompt) {
             log("Unable to save to settings file; we don't know if you want to. Do note that all settings are stored in plain text (even passwords).");
-            log(1, "To allow saving to a settings file, run:     settings file allow");
-            log(1, "To hide this message, run:                   settings file deny");
+            log(1, "To allow saving to a settings file, run 'settings file allow'. To hide this message ,run 'settings file deny'.");
         }
 
         return false;
@@ -247,7 +246,7 @@ void usage(std::string command = "") {
         log(1, "connect [ssid] [password]                 Connect to a WiFi network.");
         log(1, "associate [ssid] [password]               Associate a WiFi network, or make it known to itlwm.");
         log(1, "disassociate [ssid]                       Disassociate a WiFi network.");
-        log(1, "save [subcommand]                         Save something for use later.");
+        log(1, "save/unsave [subcommand]                  Save something for use later, or \"unsave\" (delete) a saved value.");
         log(1, "settings [subcommand]                     Manage settings.");
     } else {
         log(fmt::format("Invalid command: {}", command));
