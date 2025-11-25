@@ -50,7 +50,7 @@ That should be all, hope you enjoy!
 Requirements:
 - macOS (because it has specific header files that HeliPort needs)
 - HeliPort (run `git submodule update --init`)
-- `ftxui` installed (I installed from Brew)
+- `fmt` and `ftxui` installed (I installed from Brew)
 
 # Credits
 
@@ -58,5 +58,6 @@ Requirements:
 - OpenIntelWireless for [HeliPort](https://github.com/OpenIntelWireless/HeliPort)/[ClientKit](https://github.com/OpenIntelWireless/HeliPort/tree/master/ClientKit)
     - Note: I had to make a copy (and edit said copy) their `Api.h` to make it work with C++
 - [FTXUI](https://github.com/ArthurSonzogni/FTXUI) for the TUI framework
+- [fmt](https://github.com/fmtlib/fmt) (I tried to use Qt's QStrings at first, but I couldn't get Qt to work in Recovery; fmt was a very easy replacement)
 - [The LLVM Project](https://github.com/llvm/llvm-project) for a static version of the standard library (`libc++` and `libc++abi`)
 - Apple for macOS

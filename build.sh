@@ -7,23 +7,17 @@ CXX="/usr/bin/clang++"       # Your C++ compiler
 
 GENERATOR="Ninja"            # Your C/C++ generator (falls back to Unix Makefiles)
 ARCH="$(uname -m)"           # What architecture to build for
-TARGET=10.15                 # Minimum (target) macOS
+TARGET=10.15                 # Target (minimum) macOS
 
-BUILD_WITHOUT_VERSION=false  # -v (ignore not providing a version)
-NO_BUILD_PACKAGES=false      # -p (don't zip up packages)
-LEG_FLAG="__MODERN"          # -l (legacy)
+BUILD_WITHOUT_VERSION=false  # -v
+NO_BUILD_PACKAGES=false      # -p
 
 OPTIONS_STRING_RAW=""
-TAG=""
 
 while getopts "vf:" opt; do
     case $opt in
         v) BUILD_WITHOUT_VERSION=true ;;
         p) NO_BUILD_PACKAGES=true ;;
-        l)
-            LEG_FLAG="__LEGACY"
-            TAG="-Legacy"
-            ;;
         *)
             echo "Unknown option: -$OPTARG"
             exit 1
@@ -80,7 +74,7 @@ fi
 REL_FLAG="__$(echo "$BUILD_TYPE" | tr '[:lower:]' '[:upper:]')" # main.cpp relies on '__DEBUG' being present to determine debug mode.
 echo "Building for $BUILD_TYPE in $BUILD_DIR using generator: $GENERATOR (release flag: $REL_FLAG)"
 
-cmake -S "$ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_GENERATOR="$GENERATOR" -DCMAKE_COLOR_DIAGNOSTICS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=$TARGET -DCMAKE_CXX_FLAGS="$CXX_FLAGS -D$REL_FLAG -D$LEG_FLAG -DCMAKE_EXE_LINKER_FLAGS=\"$ROOT/lib/libc++.a $ROOT/lib/libc++abi.a\"" -Wno-dev
+cmake -S "$ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_GENERATOR="$GENERATOR" -DCMAKE_COLOR_DIAGNOSTICS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=$TARGET -DCMAKE_CXX_FLAGS="$CXX_FLAGS -D$REL_FLAG -DCMAKE_EXE_LINKER_FLAGS=\"$ROOT/lib/libc++.a $ROOT/lib/libc++abi.a\"" -Wno-dev
 cmake --build "$BUILD_DIR" --target all
 
 if [[ "$NO_BUILD_PACKAGES" == "false" ]]; then
@@ -98,7 +92,7 @@ if [[ "$NO_BUILD_PACKAGES" == "false" ]]; then
         exit 1
     fi
 
-    PKG_NAME="ItlwmCLI-macOS-$ARCH-${VERSION:-build}-$BUILD_TYPE$TAG.zip"
+    PKG_NAME="ItlwmCLI-macOS-$ARCH-${VERSION:-build}-$BUILD_TYPE.zip"
     [ -f "$PKG_NAME" ] && rm "$PKG_NAME"
     echo "Building package archive with version ${VERSION:-null} and name $PKG_NAME..."
     zip -rj "$ROOT/build/$PKG_NAME" "$PKG_DIR" # Zip up the files into an archive
