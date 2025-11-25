@@ -149,7 +149,7 @@ json loadSettings() {
         if (in.is_open()) {
             std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
             in.close();
-            
+
             try {
                 return json::parse(content);
             } catch (...) {
@@ -270,6 +270,7 @@ bool processCommand(std::string input) {
     } else if (action == "exit" || action == "e") { // 'e' is helpful, so the user doesn't think Ctrl-C is the only efficient way to exit
         log("Thanks for stopping by!");
         log("Tip: itlwm will still be running even after you exit my program.");
+        screen.PostEvent(Event::Custom);
         running = false;
         if (refresher.joinable()) refresher.join(); // Wait to exit (so we don't crash)
         screen.Exit();
@@ -299,8 +300,8 @@ bool processCommand(std::string input) {
             const std::string ssid = command[1];
             const std::string pswd = atOrDefault(command, 2, settings["savedPasswords"].value(ssid, "")); // Try to get the 3rd argument, then try to get the saved password, then default to empty
 
-            connect_network(ssid.c_str(), pswd.c_str());
             log(fmt::format("Connecting to network '{}' with password '{}'...", ssid, pswd));
+            connect_network(ssid.c_str(), pswd.c_str());
         } else {
             log("Command 'connect' needs 1-2 arguments.");
         }
@@ -310,16 +311,16 @@ bool processCommand(std::string input) {
             const std::string ssid = command[1];
             const std::string pswd = atOrDefault(command, 2, settings["savedPasswords"].value(ssid, "")); // Try to get the 3rd argument, then try to get the saved password, then default to empty
 
-            associate_ssid(ssid.c_str(), pswd.c_str());
             log(fmt::format("Associating network '{}' with password '{}'...", ssid, pswd));
+            associate_ssid(ssid.c_str(), pswd.c_str());
         } else {
             log("Command 'associate' needs 1-2 arguments.");
         }
     } else if (action == "disassociate") {
         if (command.size() >= 2) {
             const std::string ssid = command[1];
-            dis_associate_ssid(ssid.c_str());
             log(fmt::format("Disassociating network '{}'...", ssid));
+            dis_associate_ssid(ssid.c_str());
         } else {
             log("Command 'disassociate' needs 1 argument.");
         }
@@ -517,7 +518,7 @@ int main(int argc, char *argv[]) {
             networks_elements.push_back(text(""));
         }
 
-        if (iteration % RSSI_RECORD_INTERVAL == 0 && pastIteration != iteration) { // Every X iterations
+        if (rssi_available ? iteration % RSSI_RECORD_INTERVAL == 0 && pastIteration != iteration) { // Every X iterations
             signalRssis.push_back(rssi_available ? stationInfo->rssi : RSSI_UNAVAILABLE_THRESHOLD);
             if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
             pastIteration = iteration;
@@ -611,7 +612,7 @@ int main(int argc, char *argv[]) {
             positionAway = 0; // Make sure to scroll down
             logScrolledLeft = 0; // Also make sure to scroll back to the right
             screen.PostEvent(Event::Custom); // Update UI
-            
+
             std::thread([input]() { // Don't block
                 bool valid = processCommand(input);
                 if (!valid) log("Invalid command: " + input);
