@@ -18,6 +18,7 @@ To open it, simply run the binary. You can double-click it from Finder, or use t
 ItlwmCLI may *look* complex at first, but it's really not.
 
 ![Screenshot at Calebh101/ItlwmCLI/Assets/Screenshots/home.png](https://github.com/Calebh101/ItlwmCLI/raw/refs/heads/master/Assets/Screenshots/home.png)
+<sub>Note that this screenshot might be slightly outdated.</sub>
 
 The top row is the header. This tells you about ItlwmCLI, and about itlwm itself.
 

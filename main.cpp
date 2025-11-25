@@ -21,13 +21,13 @@
 #define VERSION "0.0.0B"                 // Version of the app.
 #define BETA true                        // If the app is in beta.
 
-#define MAX_RSSI_RECORD_LENGTH 10000     // The max length of the RSSI list. After this, new values added chop off the old values.
 #define CONSTANT_REFRESH_INTERVAL 50     // How many milliseconds the UI should wait to refresh (<= 0 to disable). Must be a factor of 1000.
 #define RSSI_RECORD_INTERVAL 5           // How many iterations (CONSTANT_REFRESH_INTERVAL) to wait before the RSSI value should be recorded. The actual interval would be (CONSTANT_REFRESH_INTERVAL * RSSI_RECORD_INTERVAL) milliseconds.
 
+#define MAX_RSSI_RECORD_LENGTH 10000     // The max length of the RSSI list. After this, new values added chop off the old values.
 #define HEADER_LINES 2                   // How many lines the header is.
 #define VISIBLE_LOG_LINES 6              // How many lines are used for the command line widget.
-#define VISIBLE_NETWORKS 20              // How many networks should be visible.
+#define VISIBLE_NETWORKS 32              // How many networks should be visible.
 #define BAR_WIDTH 2                      // How wide the bars for the real-time signal graph should be.
 #define TAB_MULTIPLIER 4                 // How many spaces a tab is in the command line widget.
 #define LOG_INDEX_PADDING 5              // How much to pad the log lines' line numbers with spaces
@@ -432,6 +432,8 @@ int main(int argc, char *argv[]) {
 
     unsigned long iteration = 0; // How many times the refresher thread has iterated
     unsigned long pastIteration = -1; // Keeping track of "have we already recorded for this iteration?"
+    int minRssi = 0; // Minimum RSSI of the graph
+    int maxRssi = 0; // Maximum RSSI of the graph
     std::string input_str; // What the user has inputted in the command line widget
     auto input = Input(&input_str, "Type 'help' for available commands. Use up/down to scroll."); // The input provider for the command line widget
     debug("Loading renderer...");
@@ -513,7 +515,12 @@ int main(int argc, char *argv[]) {
             pastIteration = iteration;
         }
 
-        auto makeGraph = [station_info_available](int width, int height) -> std::vector<int> {
+        // Setup stuff for the graph
+        minRssi = *std::min_element(signalRssis.begin(), signalRssis.end()); // Minimum graph point (based on the entire dataset)
+        maxRssi = *std::max_element(signalRssis.begin(), signalRssis.end()); // Maximum graph point (based on the entire dataset)
+        if (minRssi == maxRssi) maxRssi = minRssi + 1;
+
+        auto makeGraph = [station_info_available, minRssi, maxRssi](int width, int height) -> std::vector<int> {
             std::vector<int> scaled(width, 0);
             if (signalRssis.empty()) return scaled; // Empty, we don't have data yet
             std::deque<int16_t> data(signalRssis); // Duplicate the list
@@ -523,10 +530,6 @@ int main(int argc, char *argv[]) {
                 std::deque<int16_t> subvec(data.end() - width / BAR_WIDTH, data.end());
                 data = subvec;
             }
-
-            int minRssi = *std::min_element(signalRssis.begin(), signalRssis.end()); // Minimum graph point (based on the entire dataset)
-            int maxRssi = *std::max_element(signalRssis.begin(), signalRssis.end()); // Maximum graph point (based on the entire dataset)
-            if (minRssi == maxRssi) maxRssi = minRssi + 1;
 
             size_t padSize = 0;
             if (data.size() < width) padSize = width - data.size() * BAR_WIDTH; // Padding
@@ -563,8 +566,18 @@ int main(int argc, char *argv[]) {
                         text(fmt::format("RSSI: {} ({})", station_info_available ? std::to_string(stationInfo->rssi) : "Unavailable", rssiStageToString(rssiStage))),
                     }) | border | size(WIDTH, EQUAL, Terminal::Size().dimx / 2) | size(HEIGHT, EQUAL, 6),
                     // Graph showing signal strengths
-                    hbox({
-                        graph(makeGraph),
+                    vbox({
+                        text("Graph of your RSSI") | center,
+                        hbox({
+                            vbox({
+                                text(std::to_string(maxRssi)),
+                                filler(),
+                                text(std::to_string(static_cast<int>(std::round((minRssi + maxRssi) / 2.0)))), // Midpoint
+                                filler(),
+                                text(std::to_string(minRssi)),
+                            }) | size(WIDTH, EQUAL, 5),
+                            graph(makeGraph),
+                        }) | flex,
                     }) | border | flex | size(WIDTH, EQUAL, Terminal::Size().dimx / 2),
                 }),
                 // Shows what networks have been found
