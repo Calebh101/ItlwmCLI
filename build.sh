@@ -80,7 +80,7 @@ fi
 REL_FLAG="__$(echo "$BUILD_TYPE" | tr '[:lower:]' '[:upper:]')" # main.cpp relies on '__DEBUG' being present to determine debug mode.
 echo "Building for $BUILD_TYPE in $BUILD_DIR using generator: $GENERATOR (release flag: $REL_FLAG)"
 
-cmake -S "$ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_GENERATOR="$GENERATOR" -DCMAKE_COLOR_DIAGNOSTICS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=$TARGET -DCMAKE_CXX_FLAGS="$CXX_FLAGS -D$REL_FLAG _D$LEG_FLAG -DCMAKE_EXE_LINKER_FLAGS=\"$ROOT/lib/libc++.a $ROOT/lib/libc++abi.a\"" -Wno-dev
+cmake -S "$ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" -DCMAKE_GENERATOR="$GENERATOR" -DCMAKE_COLOR_DIAGNOSTICS=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=$TARGET -DCMAKE_CXX_FLAGS="$CXX_FLAGS -D$REL_FLAG -D$LEG_FLAG -DCMAKE_EXE_LINKER_FLAGS=\"$ROOT/lib/libc++.a $ROOT/lib/libc++abi.a\"" -Wno-dev
 cmake --build "$BUILD_DIR" --target all
 
 if [[ "$NO_BUILD_PACKAGES" == "false" ]]; then
