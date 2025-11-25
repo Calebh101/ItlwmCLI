@@ -13,7 +13,6 @@
 #include <vector>
 #include <deque>
 #include <regex>
-#include <fmt/format.h>
 #include <fstream>
 #include <filesystem>
 #include "json.hpp"
@@ -40,6 +39,13 @@
     #define DEBUG true
 #else
     #define DEBUG false
+#endif
+
+// Make the script aware if it's running in legacy (old macOS) mode
+#ifdef __LEGACY
+    #define LEGACY true
+#else
+    #define LEGACY false
 #endif
 
 using namespace ftxui;
@@ -127,7 +133,7 @@ std::string parse80211State(bool valid, uint32_t state) {
 // Custom debug function, it just prints to the terminal. We shouldn't use this when the GUI is running.
 template <typename... Args>
 void debug(const std::string& input, Args&&... args) {
-    std::cout << "ItlwmCLI: " << fmt::format(input, std::forward<Args>(args)...) << std::endl;
+    std::cout << "ItlwmCLI: " << std::format(input, std::forward<Args>(args)...) << std::endl;
 }
 
 // Add to command line widget logs ('output')
@@ -139,7 +145,7 @@ void log(std::string input) {
 // Same thing as the above, but with an indent
 void log(int indent, std::string input) {
     std::string spaces(indent * TAB_MULTIPLIER, ' ');
-    return log(fmt::format("{}{}", spaces, input));
+    return log(std::format("{}{}", spaces, input));
 }
 
 json loadSettings() {
@@ -174,7 +180,7 @@ bool _saveSettings(json& settings) {
         out.close();
         return true;
     } else {
-        log(fmt::format("Failed to write to settings file: {}", settingsfile.string()));
+        log(std::format("Failed to write to settings file: {}", settingsfile.string()));
         return false;
     }
 }
@@ -252,7 +258,7 @@ void usage(std::string command = "") {
         log(1, "save/unsave [subcommand]                  Save something for use later, or \"unsave\" (delete) a saved value.");
         log(1, "settings [subcommand]                     Manage settings.");
     } else {
-        log(fmt::format("Invalid command: {}", command));
+        log(std::format("Invalid command: {}", command));
     }
 }
 
@@ -265,8 +271,8 @@ bool processCommand(std::string input) {
         usage(atOrDefault(command, 1, std::string("")));
     } else if (action == "about") {
         log("ItlwmCLI by Calebh101");
-        log(1, fmt::format("Version: {}", VERSION));
-        log(1, fmt::format("{} release, {} mode", BETA ? "Beta" : "Stable", DEBUG ? "debug" : "release"));
+        log(1, std::format("Version: {}", VERSION));
+        log(1, std::format("{} release, {} mode", BETA ? "Beta" : "Stable", DEBUG ? "debug" : "release"));
     } else if (action == "exit" || action == "e") { // 'e' is helpful, so the user doesn't think Ctrl-C is the only efficient way to exit
         log("Thanks for stopping by!");
         log("Tip: itlwm will still be running even after you exit my program.");
@@ -275,7 +281,7 @@ bool processCommand(std::string input) {
         if (refresher.joinable()) refresher.join(); // Wait to exit (so we don't crash)
         screen.Exit();
     } else if (action == "echo") { // Debug command, solely for command parsing tests; won't be listed to the user
-        log(fmt::format("Received command of '{}' with {} extra arguments", action, command.size() - 1));
+        log(std::format("Received command of '{}' with {} extra arguments", action, command.size() - 1));
     } else if (action == "power") {
         if (command.size() <= 2) {
             const std::string status = command[1];
@@ -290,7 +296,7 @@ bool processCommand(std::string input) {
                 return true;
             }
 
-            log(fmt::format("Power turned {} with status {}.", status, result));
+            log(std::format("Power turned {} with status {}.", status, result));
         } else {
             log("Command 'power' needs 1 argument.");
         }
@@ -300,7 +306,7 @@ bool processCommand(std::string input) {
             const std::string ssid = command[1];
             const std::string pswd = atOrDefault(command, 2, settings["savedPasswords"].value(ssid, "")); // Try to get the 3rd argument, then try to get the saved password, then default to empty
 
-            log(fmt::format("Connecting to network '{}' with password '{}'...", ssid, pswd));
+            log(std::format("Connecting to network '{}' with password '{}'...", ssid, pswd));
             connect_network(ssid.c_str(), pswd.c_str());
         } else {
             log("Command 'connect' needs 1-2 arguments.");
@@ -311,7 +317,7 @@ bool processCommand(std::string input) {
             const std::string ssid = command[1];
             const std::string pswd = atOrDefault(command, 2, settings["savedPasswords"].value(ssid, "")); // Try to get the 3rd argument, then try to get the saved password, then default to empty
 
-            log(fmt::format("Associating network '{}' with password '{}'...", ssid, pswd));
+            log(std::format("Associating network '{}' with password '{}'...", ssid, pswd));
             associate_ssid(ssid.c_str(), pswd.c_str());
         } else {
             log("Command 'associate' needs 1-2 arguments.");
@@ -319,7 +325,7 @@ bool processCommand(std::string input) {
     } else if (action == "disassociate") {
         if (command.size() >= 2) {
             const std::string ssid = command[1];
-            log(fmt::format("Disassociating network '{}'...", ssid));
+            log(std::format("Disassociating network '{}'...", ssid));
             dis_associate_ssid(ssid.c_str());
         } else {
             log("Command 'disassociate' needs 1 argument.");
@@ -340,11 +346,11 @@ bool processCommand(std::string input) {
 
             settings["savedPasswords"][*ssid] = pswd;
             bool saved = saveSettings(settings);
-            log(fmt::format("Saved SSID '{}' with password '{}'!", ssid.value_or("<unknown>"), pswd.value_or("<unknown>")));
+            log(std::format("Saved SSID '{}' with password '{}'!", ssid.value_or("<unknown>"), pswd.value_or("<unknown>")));
         } else if (subcommand == std::nullopt) {
             log("A subcommand is required. (Run 'save help' for valid subcommands)");
         } else {
-            log(fmt::format("Invalid subcommand: {} (run 'save help' for valid subcommands)", subcommand.value_or("<unknown>")));
+            log(std::format("Invalid subcommand: {} (run 'save help' for valid subcommands)", subcommand.value_or("<unknown>")));
         }
     } else if (action == "unsave") {
         std::optional<std::string> subcommand = atOrNull(command, 1);
@@ -362,14 +368,14 @@ bool processCommand(std::string input) {
             if (settings["savedPasswords"].contains(ssid.value_or(""))) {
                 settings["savedPasswords"].erase(ssid.value_or(""));
                 bool saved = saveSettings(settings);
-                log(fmt::format("Unsaved SSID '{}'!", ssid.value_or("<unknown>")));
+                log(std::format("Unsaved SSID '{}'!", ssid.value_or("<unknown>")));
             } else {
                 log("Provided SSID doesn't have a password saved.");
             }
         } else if (subcommand == std::nullopt) {
             log("A subcommand is required. (Run 'unsave help' for valid subcommands)");
         } else {
-            log(fmt::format("Invalid subcommand: {} (run 'unsave help' for valid subcommands)", subcommand.value_or("<unknown>")));
+            log(std::format("Invalid subcommand: {} (run 'unsave help' for valid subcommands)", subcommand.value_or("<unknown>")));
         }
     } else if (action == "settings") {
         std::optional<std::string> subcommand = atOrNull(command, 1);
@@ -391,14 +397,14 @@ bool processCommand(std::string input) {
             }
         } else if (subcommand == "clear") {
             if (std::filesystem::exists(settingsfile) && std::remove(std::filesystem::absolute(settingsfile).c_str()) == 0) {
-                log(fmt::format("Settings file at {} removed.", std::filesystem::absolute(settingsfile).string()));
+                log(std::format("Settings file at {} removed.", std::filesystem::absolute(settingsfile).string()));
             } else {
-                log(fmt::format("Unable to remove settings file at {}. (Does it exist?)", std::filesystem::absolute(settingsfile).string()));
+                log(std::format("Unable to remove settings file at {}. (Does it exist?)", std::filesystem::absolute(settingsfile).string()));
             }
         } else if (subcommand == std::nullopt) {
             log("A subcommand is required. (Run 'settings help' for valid subcommands)");
         } else {
-            log(fmt::format("Invalid subcommand: {} (run 'settings help' for valid subcommands)", subcommand.value_or("<unknown>")));
+            log(std::format("Invalid subcommand: {} (run 'settings help' for valid subcommands)", subcommand.value_or("<unknown>")));
         }
     } else if (action == "save/unsave") {
         log("No silly, I meant either 'save' or 'unsave'");
@@ -456,7 +462,7 @@ int main(int argc, char *argv[]) {
             std::string index = std::to_string(i + 1);
             std::string spaces = "";
             while (index.size() + spaces.size() < LOG_INDEX_PADDING) spaces += " "; // Pad so the line numbers line up correctly
-            output_elements.push_back(text(fmt::format("{}{}.   {}", spaces, index, output[i].size() > logScrolledLeft ? output[i].substr(logScrolledLeft) : "")));
+            output_elements.push_back(text(std::format("{}{}.   {}", spaces, index, output[i].size() > logScrolledLeft ? output[i].substr(logScrolledLeft) : "")));
         }
 
         while (output_elements.size() < VISIBLE_LOG_LINES) { // Pad with blanks to keep FTXUI consistent
@@ -508,8 +514,8 @@ int main(int argc, char *argv[]) {
                 bool connected = network_ssid_available ? strcmp(currentSsid, reinterpret_cast<char*>(network.ssid)) == 0 : false; // If our current SSID matches the one we're scanning
                 if (connected) foundConnected = true;
 
-                std::string ssid(reinterpret_cast<const char*>(network.ssid), strnlen(reinterpret_cast<const char*>(network.ssid), 32)); // fmt is stingy
-                networks_elements.push_back(text(fmt::format("{}. {} (RSSI {}) {} {}", amount + 1, ssid, std::to_string(network.rssi), network.rsn_protos == 0 ? "" : "(locked)", network_ssid_available && connected ? "(connected)" : "")));
+                std::string ssid(reinterpret_cast<const char*>(network.ssid), strnlen(reinterpret_cast<const char*>(network.ssid), 32));
+                networks_elements.push_back(text(std::format("{}. {} (RSSI {}) {} {}", amount + 1, ssid, std::to_string(network.rssi), network.rsn_protos == 0 ? "" : "(locked)", network_ssid_available && connected ? "(connected)" : "")));
                 amount++;
             }
         }
@@ -561,18 +567,18 @@ int main(int argc, char *argv[]) {
         return vbox({
             // Header
             vbox({
-                text(fmt::format("ItlwmCLI {} {} by Calebh101", VERSION, DEBUG ? (BETA ? "Debug (Beta)" : "Debug") : (BETA ? "Beta" : "Release"))) | center, // We tell the user if the program is a beta release, a debug binary, or both
-                text(fmt::format("Powered by itlwm {}", network_platform_info_available ? platformInfo->driver_info_str: "Unknown")) | center,
+                text(std::format("ItlwmCLI {} {}{} by Calebh101", VERSION, DEBUG ? (BETA ? "Debug (Beta)" : "Debug") : (BETA ? "Beta" : "Release"), LEGACY ? " (Legacy)" : "")) | center, // We tell the user if the program is a beta release, a debug binary, or both
+                text(std::format("Powered by itlwm {}", network_platform_info_available ? platformInfo->driver_info_str: "Unknown")) | center,
             }) | border | size(HEIGHT, EQUAL, HEADER_LINES + 2),
             // Body
             hbox({
                 vbox({
                     // Stats
                     vbox({
-                        text(fmt::format("{}, {}", network_power_state_available ? (currentPowerState ? "On" : "Off") : "Unavailable", parse80211State(network_80211_state_available, current80211State))),
-                        text(fmt::format("{} @{} (channel {})", itlPhyModeToString(station_info_available, stationInfo->op_mode), network_platform_info_available ? platformInfo->device_info_str : "??", station_info_available ? std::to_string(stationInfo->channel) : "unavailable")),
-                        text(fmt::format("Current SSID: {}", network_ssid_available ? currentSsid : "Unavailable")),
-                        text(fmt::format("RSSI: {} ({})", rssi_available ? std::to_string(stationInfo->rssi) : "Unavailable", rssiStageToString(rssiStage))),
+                        text(std::format("{}, {}", network_power_state_available ? (currentPowerState ? "On" : "Off") : "Unavailable", parse80211State(network_80211_state_available, current80211State))),
+                        text(std::format("{} @{} (channel {})", itlPhyModeToString(station_info_available, stationInfo->op_mode), network_platform_info_available ? platformInfo->device_info_str : "??", station_info_available ? std::to_string(stationInfo->channel) : "unavailable")),
+                        text(std::format("Current SSID: {}", network_ssid_available ? currentSsid : "Unavailable")),
+                        text(std::format("RSSI: {} ({})", rssi_available ? std::to_string(stationInfo->rssi) : "Unavailable", rssiStageToString(rssiStage))),
                     }) | border | size(WIDTH, EQUAL, Terminal::Size().dimx / 2) | size(HEIGHT, EQUAL, 6),
                     // Graph showing signal strengths
                     vbox({
@@ -597,7 +603,7 @@ int main(int argc, char *argv[]) {
             // Command line
             vbox({
                 vbox(output_elements),
-                hbox({text(fmt::format("{}#. > ", inputIndexPadding)), input->Render()}),
+                hbox({text(std::format("{}#. > ", inputIndexPadding)), input->Render()}),
             }) | border | size(HEIGHT, EQUAL, VISIBLE_LOG_LINES + 3),
         });
     });

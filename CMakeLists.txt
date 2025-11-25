@@ -22,9 +22,6 @@ if(NOT IOKIT_FRAMEWORK)
     message(FATAL_ERROR "IOKit framework not found")
 endif()
 
-set(FMT_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
-find_package(fmt REQUIRED)
-
 set(FTXUI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 find_package(ftxui REQUIRED)
 
@@ -42,7 +39,6 @@ target_include_directories(ItlwmCLI
 
 target_link_libraries(ItlwmCLI
     PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/lib/libfmt.a
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/libftxui-screen.a
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/libftxui-dom.a
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/libftxui-component.a
