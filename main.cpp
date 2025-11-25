@@ -24,10 +24,13 @@
 #define CONSTANT_REFRESH_INTERVAL 50     // How many milliseconds the UI should wait to refresh (<= 0 to disable). Must be a factor of 1000.
 #define RSSI_RECORD_INTERVAL 5           // How many iterations (CONSTANT_REFRESH_INTERVAL) to wait before the RSSI value should be recorded. The actual interval would be (CONSTANT_REFRESH_INTERVAL * RSSI_RECORD_INTERVAL) milliseconds.
 
+#define RSSI_UNAVAILABLE_THRESHOLD -200  // The RSSI that means unavailable/invalid.
 #define MAX_RSSI_RECORD_LENGTH 10000     // The max length of the RSSI list. After this, new values added chop off the old values.
+
 #define HEADER_LINES 2                   // How many lines the header is.
 #define VISIBLE_LOG_LINES 6              // How many lines are used for the command line widget.
 #define VISIBLE_NETWORKS 32              // How many networks should be visible.
+
 #define BAR_WIDTH 2                      // How wide the bars for the real-time signal graph should be.
 #define TAB_MULTIPLIER 4                 // How many spaces a tab is in the command line widget.
 #define LOG_INDEX_PADDING 5              // How much to pad the log lines' line numbers with spaces
@@ -292,6 +295,7 @@ bool processCommand(std::string input) {
         }
     } else if (action == "connect") {
         if (command.size() >= 2) {
+            if (!settings.contains("savedPasswords") || !settings["savedPasswords"].is_object()) settings["savedPasswords"] = json::object();
             const std::string ssid = command[1];
             const std::string pswd = atOrDefault(command, 2, settings["savedPasswords"].value(ssid, "")); // Try to get the 3rd argument, then try to get the saved password, then default to empty
 
@@ -302,6 +306,7 @@ bool processCommand(std::string input) {
         }
     } else if (action == "associate") {
         if (command.size() >= 2) {
+            if (!settings.contains("savedPasswords") || !settings["savedPasswords"].is_object()) settings["savedPasswords"] = json::object();
             const std::string ssid = command[1];
             const std::string pswd = atOrDefault(command, 2, settings["savedPasswords"].value(ssid, "")); // Try to get the 3rd argument, then try to get the saved password, then default to empty
 
@@ -457,6 +462,7 @@ int main(int argc, char *argv[]) {
             output_elements.insert(output_elements.begin(), text(""));
         }
 
+        // Make sure to clear each time, in case it changes
         std::memset(currentSsid, 0, sizeof(currentSsid));
         std::memset(currentBssid, 0, sizeof(currentBssid));
 
@@ -469,8 +475,9 @@ int main(int argc, char *argv[]) {
         bool network_list_available = get_network_list(networks);
         bool station_info_available = get_station_info(stationInfo);
 
-        // So uh, station_info_available is always false for some reason, so we're using a different method
-        station_info_available = stationInfo ? true : false;
+        // So uh, station_info_available is always false in my experience for some reason, so we're using a different method
+        station_info_available = station_info_available || stationInfo ? true : false;
+        bool rssi_available = station_info_available && stationInfo->rssi <= 0 && stationInfo->rssi > RSSI_UNAVAILABLE_THRESHOLD;
 
         // If the WiFi is off, then everything should be off
         if (network_power_state_available == false || currentPowerState == false) {
@@ -480,9 +487,10 @@ int main(int argc, char *argv[]) {
             network_platform_info_available = false;
             network_list_available = false;
             station_info_available = false;
+            rssi_available = false;
         }
 
-        rssi_stage rssiStage = rssiToRssiStage(station_info_available, stationInfo ? stationInfo->rssi : 0);
+        rssi_stage rssiStage = rssiToRssiStage(rssi_available, stationInfo ? stationInfo->rssi : 0);
 
         if (network_list_available) {
             std::sort(networks->networks, networks->networks + networks->count, compareNetworkStrength); // Sort
@@ -510,7 +518,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (iteration % RSSI_RECORD_INTERVAL == 0 && pastIteration != iteration) { // Every X iterations
-            signalRssis.push_back(station_info_available ? stationInfo->rssi : -200);
+            signalRssis.push_back(rssi_available ? stationInfo->rssi : RSSI_UNAVAILABLE_THRESHOLD);
             if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
             pastIteration = iteration;
         }
@@ -520,7 +528,7 @@ int main(int argc, char *argv[]) {
         maxRssi = *std::max_element(signalRssis.begin(), signalRssis.end()); // Maximum graph point (based on the entire dataset)
         if (minRssi == maxRssi) maxRssi = minRssi + 1;
 
-        auto makeGraph = [station_info_available, minRssi, maxRssi](int width, int height) -> std::vector<int> {
+        auto makeGraph = [rssi_available, minRssi, maxRssi](int width, int height) -> std::vector<int> {
             std::vector<int> scaled(width, 0);
             if (signalRssis.empty()) return scaled; // Empty, we don't have data yet
             std::deque<int16_t> data(signalRssis); // Duplicate the list
@@ -537,7 +545,7 @@ int main(int argc, char *argv[]) {
             for (size_t i = 0; i < data.size(); ++i) {
                 int rssi = data[i];
                 int y = (rssi - minRssi) * height / (maxRssi - minRssi); // Make it relative
-                if (rssi <= -200) y = 0;
+                if (rssi <= RSSI_UNAVAILABLE_THRESHOLD) y = 0;
 
                 for (size_t j = 0; j < BAR_WIDTH; ++j) { // Make X points, for however wide we want the bars
                     if (padSize + i * BAR_WIDTH + j < scaled.size()) {
@@ -563,7 +571,7 @@ int main(int argc, char *argv[]) {
                         text(fmt::format("{}, {}", network_power_state_available ? (currentPowerState ? "On" : "Off") : "Unavailable", parse80211State(network_80211_state_available, current80211State))),
                         text(fmt::format("{} @{} (channel {})", itlPhyModeToString(station_info_available, stationInfo->op_mode), network_platform_info_available ? platformInfo->device_info_str : "??", station_info_available ? std::to_string(stationInfo->channel) : "unavailable")),
                         text(fmt::format("Current SSID: {}", network_ssid_available ? currentSsid : "Unavailable")),
-                        text(fmt::format("RSSI: {} ({})", station_info_available ? std::to_string(stationInfo->rssi) : "Unavailable", rssiStageToString(rssiStage))),
+                        text(fmt::format("RSSI: {} ({})", rssi_available ? std::to_string(stationInfo->rssi) : "Unavailable", rssiStageToString(rssiStage))),
                     }) | border | size(WIDTH, EQUAL, Terminal::Size().dimx / 2) | size(HEIGHT, EQUAL, 6),
                     // Graph showing signal strengths
                     vbox({
