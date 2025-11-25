@@ -7,7 +7,7 @@ CXX="/usr/bin/clang++"       # Your C++ compiler
 
 GENERATOR="Ninja"            # Your C/C++ generator (falls back to Unix Makefiles)
 ARCH="$(uname -m)"           # What architecture to build for
-TARGET=10.15                 # Target (minimum) macOS
+TARGET=10.12                 # Target (minimum) macOS
 
 BUILD_WITHOUT_VERSION=false  # -v
 NO_BUILD_PACKAGES=false      # -p

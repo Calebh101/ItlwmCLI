@@ -2,6 +2,7 @@
 *.a binary linguist-vendored
 *.dylib binary linguist-vendored
 
-include/** linguist-vendored   # From packages
-json.hpp linguist-vendored.    # From nlohmann/json
-Api.h linguist-vendored        # From OpenIntelWireless/HeliPort/ClientKit (slightly modified to work with C++)
+include/** linguist-vendored       # From packages
+json.hpp linguist-vendored         # From nlohmann/json
+filesystem.hpp linguist-vendored   # From gulrak/filesystem
+Api.h linguist-vendored            # From OpenIntelWireless/HeliPort/ClientKit (slightly modified to work with C++)

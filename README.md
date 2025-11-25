@@ -17,7 +17,7 @@ To open it, simply run the binary. You can double-click it from Finder, or use t
 
 # Compatibility
 
-- macOS Catalina to macOS Tahoe (64-bit).
+- macOS Sierra (10.12) through macOS Tahoe (26) (64-bit).
 - itlwm (**not** AirportItlwm). itlwm is the driver that presents your Intel WiFi card as Ethernet, and AirportItlwm presents your card as a WiFi card.
 
 # How to Use
@@ -59,5 +59,7 @@ Requirements:
     - Note: I had to make a copy (and edit said copy) their `Api.h` to make it work with C++
 - [FTXUI](https://github.com/ArthurSonzogni/FTXUI) for the TUI framework
 - [fmt](https://github.com/fmtlib/fmt) (I tried to use Qt's QStrings at first, but I couldn't get Qt to work in Recovery; fmt was a very easy replacement)
+- [nlohmann/json](https://github.com/nlohmann/json) for doing exactly what you think it does, being an awesome JSON library.
+- [gulrak/filesystem](https://github.com/gulrak/filesystem) for letting me compile lower than Catalina.
 - [The LLVM Project](https://github.com/llvm/llvm-project) for a static version of the standard library (`libc++` and `libc++abi`)
-- Apple for macOS
+- Apple for macOS (even though it's a love-hate relationship)
