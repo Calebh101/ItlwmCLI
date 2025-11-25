@@ -1,8 +1,15 @@
-# ItlwmCLI
+<h1 align="center">ItlwmCLI</h1>
+<p align="center">A command-line tool to communicate with OpenIntelWireless/itlwm (not AirportItlwm). Works in macOS Recovery, from Catalina to Tahoe.</p>
+
+<p align="center">
+    <a href="https://github.com/Calebh101/ItlwmCLI/actions/workflows/build.yml">
+        <img src="https://github.com/Calebh101/ItlwmCLI/actions/workflows/build.yml/badge.svg">
+    </a>
+</p>
 
 ItlwmCLI is a small TUI to directly interact with itlwm (the Intel WiFi driver for macOS). Note that this *does not* work for AirportItlwm.
 
-ItlwmCLI is more manual than HeliPort, as it *is* a TUI and not a GUI. It's made with FTXUI and HeliPort's ClientKit (which only works on macOS).
+ItlwmCLI is more manual than HeliPort. It's made with FTXUI and HeliPort's ClientKit, and thus *theoretically* has the same capabilities as HeliPort
 
 This tool also works in macOS Recovery, even though HeliPort does not. You just need to download the binary and place it somewhere accessible by macOS (note that macOS Sonoma and Sequoia can't automatically mount exFAT) and run the binary from the terminal (Utilities > Terminal).
 
@@ -10,8 +17,8 @@ To open it, simply run the binary. You can double-click it from Finder, or use t
 
 # Compatibility
 
-- macOS Catalina to macOS Tahoe (64-bit)
-- itlwm (**not** AirportItlwm)
+- macOS Catalina to macOS Tahoe (64-bit).
+- itlwm (**not** AirportItlwm). itlwm is the driver that presents your Intel WiFi card as Ethernet, and AirportItlwm presents your card as a WiFi card.
 
 # How to Use
 
@@ -44,3 +51,13 @@ Requirements:
 - macOS (because it has specific header files that HeliPort needs)
 - HeliPort (run `git submodule update --init`)
 - `fmt` and `ftxui` installed (I installed from Brew)
+
+# Credits
+
+- OpenIntelWireless for [itlwm](https://github.com/OpenIntelWireless/itlwm)
+- OpenIntelWireless for [HeliPort](https://github.com/OpenIntelWireless/HeliPort)/[ClientKit](https://github.com/OpenIntelWireless/HeliPort/tree/master/ClientKit)
+    - Note: I had to make a copy (and edit said copy) their `Api.h` to make it work with C++
+- [FTXUI](https://github.com/ArthurSonzogni/FTXUI) for the TUI framework
+- [fmt](https://github.com/fmtlib/fmt) (I tried to use Qt's QStrings at first, but I couldn't get Qt to work in Recovery; fmt was a very easy replacement)
+- [The LLVM Project](https://github.com/llvm/llvm-project) for a static version of the standard library (`libc++` and `libc++abi`)
+- Apple for macOS
