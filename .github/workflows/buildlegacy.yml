@@ -33,7 +33,7 @@ jobs:
           cd osxcross
           git checkout osxcross-1.1
           mkdir -p tarballs
-          curl -L $OSX_SDK_URL -o tarballs/MacOSX10.5.sdk.tar.xz
+          curl -L $OSX_SDK_URL -o tarballs/MacOSX10.5.sdk.tar.bz2
           UNATTENDED=1 OSX_VERSION_MIN=$OSX_SDK_VERSION ./build.sh
           cd ..
 
