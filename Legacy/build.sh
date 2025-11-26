@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-TARGET=10.5
+TARGET=10.7
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" # Root of the project
 PARENT="$(dirname $ROOT)" # Root of the repo
 
@@ -38,15 +38,15 @@ mkdir -p "$BUILD_86"
 mkdir -p "$BUILD_64"
 
 TARGET_FILES="$ROOT/main.cpp -x c -include unistd.h $PARENT/HeliPort/ClientKit/Api.c"
-EXTRAFLAGS="-I$ROOT/include -I$PARENT/HeliPort/ClientKit -framework CoreFoundation -framework IOKit"
+EXTRAFLAGS="-I$ROOT/include -I$PARENT/HeliPort/ClientKit -framework CoreFoundation -framework IOKit -stdlib=libstdc++"
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # Needs osxcross and 10.5 SDK
+    # Needs osxcross and the target macOS's SDK
     echo "Using osxcross to compile ItlwmCLI for OS X $TARGET with version ${VERSION:-null}..."
     o32-clang++ $TARGET_FILES -o "$BUILD_86/ItlwmCLILegacy" $EXTRAFLAGS -mmacosx-version-min=$TARGET
     o64-clang++ $TARGET_FILES -o "$BUILD_64/ItlwmCLILegacy" $EXTRAFLAGS -mmacosx-version-min=$TARGET
 elif [[ "$OSTYPE" == "darwin"* ]]; then
-    # Needs to be run on macOS 10.5
+    # Needs to be run on the target macOS
     echo "Using g++ to compile ItlwmCLI for OS X $TARGET with version ${VERSION:-null}..."
     g++ $TARGET_FILES -o "$BUILD_86/ItlwmCLILegacy" -arch i386 $EXTRAFLAGS -mmacosx-version-min=$TARGET
     g++ $TARGET_FILES -o "$BUILD_64/ItlwmCLILegacy" -arch x86_64 $EXTRAFLAGS -mmacosx-version-min=$TARGET
