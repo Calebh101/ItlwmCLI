@@ -1,5 +1,5 @@
 <h1 align="center">ItlwmCLI</h1>
-<p align="center">A command-line tool to communicate with OpenIntelWireless/itlwm (not AirportItlwm). Works in macOS Recovery, from Sierra to Tahoe.</p>
+<p align="center">A command-line tool to communicate with OpenIntelWireless/itlwm (not AirportItlwm). Works in macOS Recovery.</p>
 
 <p align="center">
     <a href="https://github.com/Calebh101/ItlwmCLI/actions/workflows/build.yml">
