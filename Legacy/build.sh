@@ -42,12 +42,12 @@ EXTRAFLAGS="-I$ROOT/include -I$PARENT/HeliPort/ClientKit -framework CoreFoundati
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     # Needs osxcross and 10.5 SDK
-    echo "Using osxcross to compile ItlwmCLI for OS X $TARGET..."
+    echo "Using osxcross to compile ItlwmCLI for OS X $TARGET with version ${VERSION:-null}..."
     o32-clang++ $TARGET_FILES -o "$BUILD_86/ItlwmCLILegacy" $EXTRAFLAGS -mmacosx-version-min=$TARGET
     o64-clang++ $TARGET_FILES -o "$BUILD_64/ItlwmCLILegacy" $EXTRAFLAGS -mmacosx-version-min=$TARGET
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     # Needs to be run on macOS 10.5
-    echo "Using g++ to compile ItlwmCLI for OS X $TARGET..."
+    echo "Using g++ to compile ItlwmCLI for OS X $TARGET with version ${VERSION:-null}..."
     g++ $TARGET_FILES -o "$BUILD_86/ItlwmCLILegacy" -arch i386 $EXTRAFLAGS -mmacosx-version-min=$TARGET
     g++ $TARGET_FILES -o "$BUILD_64/ItlwmCLILegacy" -arch x86_64 $EXTRAFLAGS -mmacosx-version-min=$TARGET
 else
@@ -57,9 +57,16 @@ fi
 
 echo "Copying files..."
 cp "$PARENT/README.md" "$BUILD_86/README.md"
+cp "$ROOT/README.md" "$BUILD_86/README-too.md"
 cp "$PARENT/LICENSE" "$BUILD_86/LICENSE.txt"
 cp "$PARENT/README.md" "$BUILD_64/README.md"
+cp "$ROOT/README.md" "$BUILD_64/README-too.md"
 cp "$PARENT/LICENSE" "$BUILD_64/LICENSE.txt"
+
+if [[ -n "$VERSION" ]]; then
+    echo "$VERSION" > "$BUILD_86/VERSION.txt"
+    echo "$VERSION" > "$BUILD_64/VERSION.txt"
+fi
 
 if [[ "$BUILD_WITHOUT_VERSION" == "false" && -z "$VERSION" ]]; then
     echo "A version should be provided (as positional argument 1) when building."

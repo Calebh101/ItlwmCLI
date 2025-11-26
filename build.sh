@@ -87,6 +87,10 @@ if [[ "$NO_BUILD_PACKAGES" == "false" ]]; then
     cp "$ROOT/LICENSE" "$PKG_DIR/LICENSE.txt"
     cp "$BUILD_DIR/ItlwmCLI" "$PKG_DIR/ItlwmCLI"
 
+    if [[ -n "$VERSION" ]]; then
+        echo "$VERSION" > "$PKG_DIR/VERSION.txt"
+    fi
+
     if [[ "$BUILD_WITHOUT_VERSION" == "false" && -z "$VERSION" && "$BUILD_TYPE" == "Release" ]]; then
         echo "A version should be provided (as positional argument 2) when building in release mode."
         exit 1
