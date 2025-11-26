@@ -43,6 +43,8 @@
 #endif
 
 using namespace ftxui;
+using namespace gch::filesystem;
+
 using fs = ghc::filesystem;
 using json = nlohmann::json;
 
