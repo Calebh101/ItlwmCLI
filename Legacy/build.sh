@@ -70,7 +70,7 @@ PKG_NAME_32="$ROOT/build/ItlwmCLI-Legacy-OSX-i386-${VERSION:-build}.zip"
 PKG_NAME_64="$ROOT/build/ItlwmCLI-Legacy-OSX-x64-${VERSION:-build}.zip"
 
 echo "Building package archives with version ${VERSION:-null}..."
-zip -rj "$PKG_NAME_32" "$ROOT/build/x64"
-zip -rj "$PKG_NAME_64" "$ROOT/build/i386"
+zip -rj "$PKG_NAME_32" "$ROOT/build/i386"
+zip -rj "$PKG_NAME_64" "$ROOT/build/x64"
 
 echo "Job complete! Make sure you updated the version/beta in main.cpp!"
