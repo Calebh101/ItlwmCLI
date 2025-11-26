@@ -29,16 +29,16 @@ set(FTXUI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 find_package(ftxui REQUIRED)
 
 add_executable(ItlwmCLI
-    json.hpp
-    filesystem.hpp
-    Api.h
+    ${CMAKE_SOURCE_DIR}/include/json.hpp
+    ${CMAKE_SOURCE_DIR}/include/filesystem.hpp
+    ${CMAKE_SOURCE_DIR}/include/Api.h
     HeliPort/ClientKit/Api.c
     main.cpp
 )
 
 target_include_directories(ItlwmCLI
     PRIVATE
-    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/HeliPort/ClientKit
 )
 
