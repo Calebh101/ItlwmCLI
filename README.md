@@ -5,6 +5,9 @@
     <a href="https://github.com/Calebh101/ItlwmCLI/actions/workflows/build.yml">
         <img src="https://github.com/Calebh101/ItlwmCLI/actions/workflows/build.yml/badge.svg">
     </a>
+    <a href="https://github.com/Calebh101/ItlwmCLI/actions/workflows/buildlegacy.yml">
+        <img src="https://github.com/Calebh101/ItlwmCLI/actions/workflows/buildlegacy.yml/badge.svg">
+    </a>
 </p>
 
 ItlwmCLI is a small TUI to directly interact with itlwm (the Intel WiFi driver for macOS). Note that this *does not* work for AirportItlwm.

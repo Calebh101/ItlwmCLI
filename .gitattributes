@@ -4,3 +4,4 @@
 
 # Packages and external headers
 include/* linguist-vendored
+Legacy/include/* linguist-vendored
