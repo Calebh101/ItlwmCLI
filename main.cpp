@@ -415,7 +415,7 @@ bool compareNetworkStrength(const ioctl_network_info& a, const ioctl_network_inf
     return abs(a.rssi) < abs(b.rssi);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     #ifndef __APPLE__
         debug("This program requires macOS to run.") // No Timmy, this doesn't work on Windows 11
     #endif

@@ -81,6 +81,7 @@ CMakeLists.txt.user*
 .rcc/
 .uic/
 /build*/
+/Legacy/build*/
 
 # IDE files
 .vscode

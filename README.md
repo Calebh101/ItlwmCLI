@@ -18,6 +18,7 @@ To open it, simply run the binary. You can double-click it from Finder, or use t
 # Compatibility
 
 - macOS Sierra (10.12) through macOS Tahoe (26) (64-bit).
+    - Don't meet these requirements? Try out [ItlwmCLILegacy](https://github.com/Calebh101/ItlwmCLI/blob/master/Legacy/README.md).
 - itlwm (**not** AirportItlwm). itlwm is the driver that presents your Intel WiFi card as Ethernet, and AirportItlwm presents your card as a WiFi card.
 
 # How to Use
