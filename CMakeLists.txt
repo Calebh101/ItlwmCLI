@@ -29,11 +29,11 @@ set(FTXUI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 find_package(ftxui REQUIRED)
 
 add_executable(ItlwmCLI
-    main.cpp
-    HeliPort/ClientKit/Api.c
-    Api.h
     json.hpp
     filesystem.hpp
+    Api.h
+    HeliPort/ClientKit/Api.c
+    main.cpp
 )
 
 target_include_directories(ItlwmCLI
