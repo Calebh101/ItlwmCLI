@@ -38,6 +38,7 @@ add_executable(ItlwmCLI
 
 target_include_directories(ItlwmCLI
     PRIVATE
+    ${CMAKE_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/HeliPort/ClientKit
 )
 
