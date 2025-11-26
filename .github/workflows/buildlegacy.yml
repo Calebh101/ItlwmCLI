@@ -34,7 +34,7 @@ jobs:
           cd osxcross
           git checkout osxcross-1.1
           mkdir -p tarballs
-          curl -L $OSX_SDK_URL -o tarballs/${{ matrix.OSX_SDK_FILE }}
+          curl -L $OSX_SDK_URL -o tarballs/$OSX_SDK_FILE
           UNATTENDED=1 OSX_VERSION_MIN=$OSX_SDK_VERSION ./build.sh
           cd ..
 
