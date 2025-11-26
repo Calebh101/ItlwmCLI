@@ -1,0 +1,35 @@
+name: Build for macOS Legacy
+
+permissions:
+  contents: write
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup
+        run: |
+          git submodule update --init --recursive
+          chmod +x ./Legacy/build.sh
+
+      - name: Install Dependencies
+        run: |
+          brew install cmake ninja || true
+
+      - name: Build
+        run: |
+          ./Legacy/build.sh -v
+
+      - name: Upload to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Artifacts
+          path: Legacy/build/*.zip
+          if-no-files-found: warn
