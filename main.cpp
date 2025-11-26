@@ -530,6 +530,10 @@ int main(int argc, char *argv[]) {
         maxRssi = *std::max_element(signalRssis.begin(), signalRssis.end()); // Maximum graph point (based on the entire dataset)
         if (minRssi == maxRssi) maxRssi = minRssi + 1;
 
+        long long rssiSum = 0;
+        for (int n : signalRssis) rssiSum += n;
+        int rssiAverage = static_cast<int>((rssiSum - numbers.size()/2) / numbers.size());
+
         auto makeGraph = [rssi_available, minRssi, maxRssi](int width, int height) -> std::vector<int> {
             std::vector<int> scaled(width, 0);
             if (signalRssis.empty()) return scaled; // Empty, we don't have data yet
@@ -573,7 +577,7 @@ int main(int argc, char *argv[]) {
                         text(fmt::format("{}, {}", network_power_state_available ? (currentPowerState ? "On" : "Off") : "Unavailable", parse80211State(network_80211_state_available, current80211State))),
                         text(fmt::format("{} @{} (channel {})", itlPhyModeToString(station_info_available, stationInfo->op_mode), network_platform_info_available ? platformInfo->device_info_str : "??", station_info_available ? std::to_string(stationInfo->channel) : "unavailable")),
                         text(fmt::format("Current SSID: {}", network_ssid_available ? currentSsid : "Unavailable")),
-                        text(fmt::format("RSSI: {} ({})", rssi_available ? std::to_string(stationInfo->rssi) : "Unavailable", rssiStageToString(rssiStage))),
+                        text(fmt::format("RSSI: {} ({}) (average: {})", rssi_available ? std::to_string(stationInfo->rssi) : "Unavailable", rssiStageToString(rssiStage), std::to_string(rssiAverage))),
                     }) | border | size(WIDTH, EQUAL, Terminal::Size().dimx / 2) | size(HEIGHT, EQUAL, 6),
                     // Graph showing signal strengths
                     vbox({
