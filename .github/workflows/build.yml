@@ -24,6 +24,9 @@ jobs:
           brew install cmake ninja || true
           brew install fmt ftxui || true
 
+          echo "Found headers to be included:"
+          ls -alR include
+
       - name: Build Debug
         run: |
           ./build.sh -v debug
