@@ -6,13 +6,16 @@
     </a>
 </p>
 
-This section of the project is made for machines running lower than macOS Sierra. The requirements for this version are pretty much the requirements for itlwm.
+This section of the project is made for machines running lower than macOS Sierra (or if you're running on something like High Sierra on x86). The requirements for this version are pretty much the requirements for itlwm.
 
 - Mac OS X Lion (10.7) through OS X El Capitan (10.11).
 - 32-bit *or* 64-bit CPU.
 
 Note that this project is not as maintained as regular ItlwmCLI, so it may not always work properly.
 
-# Usage
+This is very similar to the main ItlwmCLI, but it has a few differences:
+- It has an extremely simple TUI
+- There's no graph or network list in the TUI
+- There's no settings features (yet, if there's demand it's possible)
 
-TODO
+Other than that, it uses the exact same API as the main ItlwmCLI, so it should be able to do whatever itlwm can do.

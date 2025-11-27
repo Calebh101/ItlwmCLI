@@ -237,7 +237,7 @@ void usage(std::string command = "") {
         log(1, "settings help                             Print this help message.");
         log(1, "settings clear                            Delete the app's settings file.");
         log(1, "settings file [status]                    Decide if you want to allow saving a settings file or not. If a settings file already exists, this is not necessary. 'status' can be 'allow' or 'deny'.");
-    } else if (command == "save") {
+    } else if (command == "save" || command == "unsave") {
         log("save/unsave Usage:");
         log(1, "save/unsave help                          Print this help message.");
         log(1, "save/unsace password [SSID] [password]    Save a password for a WiFi network, for use later.");
@@ -254,6 +254,7 @@ void usage(std::string command = "") {
         log(1, "settings [subcommand]                     Manage settings.");
     } else {
         log(fmt::format("Invalid command: {}", command));
+        log(fmt::format("Tip: Not all commands have a dedicated usage page. Run 'help' for a list of all commands!"));
     }
 }
 
