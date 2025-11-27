@@ -2,7 +2,7 @@
 # run.sh [version] [architecture]
 set -e
 
-VERSION=$1
+VERSION=${1:-0.0.0A}
 ARCH=${2:-x64}
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
