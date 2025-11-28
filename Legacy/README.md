@@ -21,4 +21,5 @@ This is very similar to the main ItlwmCLI, but it has a few differences:
 Other than that, it uses the exact same API as the main ItlwmCLI, so it should be able to do whatever itlwm can do.
 
 ![Screenshot at Calebh101/ItlwmCLI/Assets/Screenshots/legacy.png](https://github.com/Calebh101/ItlwmCLI/raw/refs/heads/master/Assets/Screenshots/legacy.png)
+
 <sub>Note that this screenshot is from a Linux environment, so it does not have access to itlwm.
