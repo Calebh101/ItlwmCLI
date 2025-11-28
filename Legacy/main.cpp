@@ -11,19 +11,19 @@
 #include <iomanip>
 #include <sstream>
 
-#define VERSION "0.0.0B"                 // Version of the app.
+#define VERSION "0.0.0C"                 // Version of the app.
 #define BETA true                        // If the app is in beta.
 #define DEBUG false                      // The legacy version does not have a debug mode.
 
 #define LOOP_INTERVAL 10000              // How much the program should wait in between each refresh, in microseconds.
 #define RSSI_UNAVAILABLE_THRESHOLD -200  // The RSSI that means unavailable/invalid.
 
-#define HEADER_LINES 5                   // How many lines are in the header.
+#define HEADER_LINES 6                   // How many lines are in the header.
 #define MIN_LOG_INDEX_WIDTH 5            // The minimum width for the line numbers before the log lines. They dynamically expand.
 #define TAB_MULTIPLIER 4                 // How many spaces a tab is in the command line widget.
 
-static struct termios oldt, newt;
-std::vector<std::string> logs;
+static struct termios oldt, newt; // Terminal settings
+std::vector<std::string> logs; // Previous logs
 int positionAway = 0; // How far we have scrolled up in the command line
 int logScrolledLeft = 0; // How far we've scrolled right in the command line
 
@@ -101,12 +101,14 @@ std::string parse80211State(bool valid, uint32_t state) {
     }
 }
 
+// Format via va_list (buffer of 1024)
 std::string vformat(const char* fmt, va_list args) {
     char buffer[1024];
     std::vsprintf(buffer, fmt, args);
     return std::string(buffer);
 }
 
+// Format via args (buffer of 1024)
 std::string format(const char* formatter, ...) {
     char buffer[1024];
     va_list args;
@@ -116,20 +118,24 @@ std::string format(const char* formatter, ...) {
     return std::string(buffer);
 }
 
+// Print to the console
 void print(const char* formatter, ...) {
     va_list args;
     va_start(args, formatter);
     std::cout << vformat(formatter, args) << '\n';
 }
 
+// Append to the in-app logs
 void log(const std::string input) {
     logs.push_back(input);
 }
 
+// Same as above, but with an optional amount of tabs
 void log(int tabs, const std::string input) {
-    logs.push_back(format("%s%s", std::string(tabs * TAB_MULTIPLIER, ' ').c_str(), input.c_str()));
+    log(format("%s%s", std::string(tabs * TAB_MULTIPLIER, ' ').c_str(), input.c_str()));
 }
 
+// Parse a user's input
 std::vector<std::string> parseCommand(const std::string& input) {
     std::vector<std::string> args;
     std::string token;
@@ -141,7 +147,7 @@ std::vector<std::string> parseCommand(const std::string& input) {
         char c = input[i];
 
         if (inDoubleQuotes) {
-            if (c == '"') {
+            if (c == '"') { // Exit out of double quotes
                 inDoubleQuotes = false;
                 args.push_back(token);
                 token.clear();
@@ -149,7 +155,7 @@ std::vector<std::string> parseCommand(const std::string& input) {
                 token += c;
             }
         } else if (inSingleQuotes) {
-            if (c == '\'') {
+            if (c == '\'') { // Exit out of single quotes
                 inSingleQuotes = false;
                 args.push_back(token);
                 token.clear();
@@ -157,6 +163,7 @@ std::vector<std::string> parseCommand(const std::string& input) {
                 token += c;
             }
         } else {
+            // If not in quotes, and we've encountered a space, we're treating that as the end of the argument
             if (std::isspace(static_cast<unsigned char>(c))) {
                 if (!token.empty()) {
                     args.push_back(token);
@@ -301,6 +308,8 @@ bool processCommand(std::string input) {
     return true; // So we don't have to specify return true in each command, it's just caught in overflow
 }
 
+// This is run when the user tries to run a command.
+// Basically we try to process it, then delete the inputted argument to avoid leaking memory.
 void* worker(void* arg) {
     std::string input = *static_cast<std::string*>(arg);
     bool valid = processCommand(input);
@@ -309,22 +318,7 @@ void* worker(void* arg) {
     return nullptr;
 }
 
-void initTerminal() {
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt = oldt;
-    newt.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
-}
-
-void restoreTerminal() {
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-}
-
-void clearScreen() {
-    std::cout << "\033[2J\033[H";
-}
-
+// This is run at the start of the app, so we don't block when getting this info.
 void* querier(void* arg) {
     while (true) {
         network_ssid_available = get_network_ssid(currentSsid);
@@ -339,26 +333,43 @@ void* querier(void* arg) {
     }
 }
 
+void clearTerminal() {
+    std::cout << "\033[H\033[2J\033[3J" << std::flush;
+}
+
+void initTerminal() {
+    tcgetattr(STDIN_FILENO, &oldt); // Save current settings
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO); // Disable line buffering and echoing typed characters
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt); // Apply
+    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK); // Make input non-blocking
+}
+
+void restoreTerminal() {
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt); // Reset settings to old
+}
+
 int main(int argc, char* argv[]) {
     print("Starting ItlwmCLI legacy version %s %s...", VERSION, BETA ? "beta" : "release");
     std::string input;
     char c;
+    size_t i = 0;
     pthread_t t;
 
+    // Try to create the querier
     if (pthread_create(&t, nullptr, querier, nullptr)) {
-        std::cerr << "Failed to create thread!\n";
+        std::cerr << "Failed to create querier thread!\n";
         return 1;
     }
 
-    pthread_detach(t);
+    pthread_detach(t); // Detach from the thread
     print("Starting application...");
     initTerminal();
-    clearScreen();
 
     while (true) {
-        std::cout << "\033[H\033[2J";
+        clearTerminal();
         winsize w;
-        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w); // Get window size
 
         // Make sure to clear each time, in case it changes
         std::memset(currentSsid, 0, sizeof(currentSsid));
@@ -379,51 +390,58 @@ int main(int argc, char* argv[]) {
             rssi_available = false;
         }
 
+        // Get the RSSI stage
         rssi_stage rssiStage = rssiToRssiStage(rssi_available, stationInfo ? stationInfo->rssi : 0);
 
         std::cout << format("ItlwmCLI Legacy %s %s by Calebh101\n", VERSION, BETA ? "Beta" : "Release");
         std::cout << format("Powered by itlwm %s\n\n", network_platform_info_available ? platformInfo->driver_info_str: "Unknown");
+        std::cout << format("%s, %s\n", network_power_state_available ? (currentPowerState ? "On" : "Off") : "Unavailable", parse80211State(network_80211_state_available, current80211State).c_str());
         std::cout << format("%s @%s (channel %d)\n", itlPhyModeToString(station_info_available, stationInfo->op_mode).c_str(), network_platform_info_available ? platformInfo->device_info_str : "??", station_info_available ? stationInfo->channel : 0);
         std::cout << format("Current SSID: %s, RSSI: %d (%s)\n", network_ssid_available ? currentSsid : "Unavailable", station_info_available ? stationInfo->rssi : 0, rssiStageToString(rssiStage).c_str());
         std::cout << std::string(w.ws_col, '_') << "\n\n"; // Make it look like a solid centered line, even though it's just an underscore
 
-        int maxLogRows = w.ws_row - HEADER_LINES - 3; // header + prompt + divider
-        int toShow = std::min((int)logs.size(), maxLogRows);
-        int start = std::max(0, (int)logs.size() - toShow - positionAway);
-        int topPadding = maxLogRows - toShow;
+        // This drove me crazy, but the Gnome terminal includes the top nav bar in the terminal row count.
+        // *sigh* an hour of debugging wasted
+
+        int maxLogRows = w.ws_row - HEADER_LINES - 3; // header + divider + prompt
+        int toShow = std::min((int)logs.size(), maxLogRows); // Which is smaller, the log count or the maximum log rows
+        int start = std::max(0, (int)logs.size() - toShow - positionAway); // Make sure we don't go below 0 for where we start in the logs
+        int topPadding = maxLogRows - toShow; // How much we pad
 
         for (int i = 0; i < topPadding; i++) std::cout << "\n";
-        for (int i = start; i < start + toShow && i < logs.size(); ++i) std::cout << std::setw(MIN_LOG_INDEX_WIDTH) << (i + 1) << ". " << (logs[i].size() > logScrolledLeft ? logs[i].substr(logScrolledLeft) : "") << "\n";
+        for (int i = start; i < start + toShow && i < logs.size(); i++) std::cout << std::setw(MIN_LOG_INDEX_WIDTH) << (i + 1) << ". " << (logs[i].size() > logScrolledLeft ? logs[i].substr(logScrolledLeft) : "") << "\n";
 
+        // No std::to_string
         std::ostringstream ss;
         ss << logs.size();
 
-        std::cout << "\033[" << w.ws_row << ";1H";
-        std::cout << std::setw(MIN_LOG_INDEX_WIDTH) << std::string(ss.str().size(), '#') << ". > " << input << "";
+        std::cout << "\033[" << w.ws_row << ";1H"; // Jump to bottom row
+        std::cout << std::setw(MIN_LOG_INDEX_WIDTH) << std::string(ss.str().size(), '#') << ". > " << input << ""; // Fancy # duplication because I felt like it
 
         if (read(STDIN_FILENO, &c, 1) > 0) {
             if (c == '\n') {
                 if (!input.empty()) {
                     log(format("> %s", input.c_str()));
-                    std::string* string = new std::string(input.c_str());
+                    std::string* string = new std::string(input.c_str()); // New string
                     input.clear();
                     positionAway = 0; // Make sure to scroll down
                     logScrolledLeft = 0; // Also make sure to scroll back to the right
                     pthread_t t;
 
+                    // Create worker thread to not block
                     if (pthread_create(&t, nullptr, worker, string)) {
-                        std::cerr << "Failed to create thread!\n";
+                        std::cerr << "Failed to create worker thread!\n";
                         return 1;
                     }
 
-                    pthread_detach(t);
+                    pthread_detach(t); // Detach from the thread
                 }
-            } else if (c == 127 || c == 8) {
+            } else if (c == 127 || c == 8) { // Backspace
                 if (!input.empty()) input.erase(input.size() - 1);
-            } else if (c == 27) {
+            } else if (c == 27) { // Start of a sequence
                 char seq[2];
 
-                if (read(STDIN_FILENO, &seq[0], 1) > 0 && read(STDIN_FILENO, &seq[1], 1) > 0) {
+                if (read(STDIN_FILENO, &seq[0], 1) > 0 && read(STDIN_FILENO, &seq[1], 1) > 0) { // Read the next two items in the sequence
                     if (seq[0] == '[') {
                         switch (seq[1]) {
                             case 'A' /* up */:
@@ -448,6 +466,7 @@ int main(int argc, char* argv[]) {
         }
 
         std::cout.flush();
+        i++;
         usleep(LOOP_INTERVAL);
     }
 

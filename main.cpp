@@ -18,7 +18,7 @@
 #include "json.hpp"
 #include "filesystem.hpp"
 
-#define VERSION "0.0.0B"                 // Version of the app.
+#define VERSION "0.0.0C"                 // Version of the app.
 #define BETA true                        // If the app is in beta.
 
 #define CONSTANT_REFRESH_INTERVAL 50     // How many milliseconds the UI should wait to refresh (<= 0 to disable). Must be a factor of 1000.
