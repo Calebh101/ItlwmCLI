@@ -43,6 +43,7 @@ bool network_power_state_available = false;
 bool network_platform_info_available = false;
 bool network_list_available = false;
 bool station_info_available = false;
+bool rssi_available = false;
 
 enum rssi_stage {
     rssi_stage_excellent,
@@ -324,6 +325,10 @@ void* worker(void* arg) {
 // This is run at the start of the app, so we don't block when getting this info.
 void* querier(void* arg) {
     while (true) {
+        // Make sure to clear each time, in case it changes
+        std::memset(currentSsid, 0, sizeof(currentSsid));
+        std::memset(currentBssid, 0, sizeof(currentBssid));
+
         network_ssid_available = get_network_ssid(currentSsid);
         network_bssid_available = get_network_bssid(currentBssid);
         network_80211_state_available = get_80211_state(&current80211State);
@@ -331,6 +336,21 @@ void* querier(void* arg) {
         network_platform_info_available = get_platform_info(platformInfo);
         network_list_available = get_network_list(networks);
         station_info_available = get_station_info(stationInfo);
+
+        // So uh, station_info_available is always false in my experience for some reason, so we're using a different method
+        station_info_available = station_info_available || stationInfo != nullptr ? true : false;
+        rssi_available = station_info_available && stationInfo->rssi <= 0 && stationInfo->rssi > RSSI_UNAVAILABLE_THRESHOLD;
+
+        // If the WiFi is off, then everything should be off
+        if (network_power_state_available == false || currentPowerState == false) {
+            network_ssid_available = false;
+            network_bssid_available = false;
+            network_80211_state_available = false;
+            network_platform_info_available = false;
+            network_list_available = false;
+            station_info_available = false;
+            rssi_available = false;
+        }
 
         usleep(LOOP_INTERVAL);
     }
@@ -374,27 +394,8 @@ int main(int argc, char* argv[]) {
         winsize w;
         ioctl(STDOUT_FILENO, TIOCGWINSZ, &w); // Get window size
 
-        // Make sure to clear each time, in case it changes
-        std::memset(currentSsid, 0, sizeof(currentSsid));
-        std::memset(currentBssid, 0, sizeof(currentBssid));
-
-        // So uh, station_info_available is always false in my experience for some reason, so we're using a different method
-        station_info_available = station_info_available || stationInfo != nullptr ? true : false;
-        bool rssi_available = station_info_available && stationInfo->rssi <= 0 && stationInfo->rssi > RSSI_UNAVAILABLE_THRESHOLD;
-
-        // If the WiFi is off, then everything should be off
-        if (network_power_state_available == false || currentPowerState == false) {
-            network_ssid_available = false;
-            network_bssid_available = false;
-            network_80211_state_available = false;
-            network_platform_info_available = false;
-            network_list_available = false;
-            station_info_available = false;
-            rssi_available = false;
-        }
-
         // Get the RSSI stage
-        rssi_stage rssiStage = rssiToRssiStage(rssi_available, stationInfo ? stationInfo->rssi : 0);
+        rssi_stage rssiStage = rssiToRssiStage(rssi_available, station_info_available ? stationInfo->rssi : 0);
 
         std::cout << format("ItlwmCLI Legacy %s %s by Calebh101\n", VERSION, BETA ? "Beta" : "Release");
         std::cout << format("Powered by itlwm %s\n\n", network_platform_info_available ? platformInfo->driver_info_str: "Unknown");

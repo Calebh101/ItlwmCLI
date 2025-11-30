@@ -480,7 +480,7 @@ int main(int argc, char* argv[]) {
 
         // So uh, station_info_available is always false in my experience for some reason, so we're using a different method
         station_info_available = station_info_available || stationInfo ? true : false;
-        bool rssi_available = station_info_available && stationInfo->rssi <= 0 && stationInfo->rssi > RSSI_UNAVAILABLE_THRESHOLD;
+        bool rssi_available = station_info_available && stationInfo->rssi < 0 && stationInfo->rssi > RSSI_UNAVAILABLE_THRESHOLD;
 
         // If the WiFi is off, then everything should be off
         if (network_power_state_available == false || currentPowerState == false) {
@@ -493,6 +493,7 @@ int main(int argc, char* argv[]) {
             rssi_available = false;
         }
 
+        if (network_80211_state_available == false || current80211State != ITL80211_S_RUN) rssi_available = false; // If we're not connected, don't record the signal strength
         rssi_stage rssiStage = rssiToRssiStage(rssi_available, stationInfo ? stationInfo->rssi : 0);
 
         if (network_list_available) {
@@ -531,9 +532,10 @@ int main(int argc, char* argv[]) {
         maxRssi = *std::max_element(signalRssis.begin(), signalRssis.end()); // Maximum graph point (based on the entire dataset)
         if (minRssi == maxRssi) maxRssi = minRssi + 1;
 
+        // Get average RSSI
         long long rssiSum = 0;
-        for (int n : signalRssis) rssiSum += n;
-        int rssiAverage = signalRssis.empty() ? 0 : static_cast<int>(rssiSum / signalRssis.size());
+        for (int n : signalRssis) rssiSum += abs(n);
+        int rssiAverage = signalRssis.empty() ? 0 : -static_cast<int>(rssiSum / signalRssis.size());
 
         auto makeGraph = [rssi_available, minRssi, maxRssi](int width, int height) -> std::vector<int> {
             std::vector<int> scaled(width, 0);
