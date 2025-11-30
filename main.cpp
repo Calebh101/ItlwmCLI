@@ -533,7 +533,7 @@ int main(int argc, char* argv[]) {
 
         long long rssiSum = 0;
         for (int n : signalRssis) rssiSum += n;
-        int rssiAverage = static_cast<int>((rssiSum - signalRssis.size()/2) / signalRssis.size());
+        int rssiAverage = signalRssis.empty() ? 0 : static_cast<int>(rssiSum / signalRssis.size());
 
         auto makeGraph = [rssi_available, minRssi, maxRssi](int width, int height) -> std::vector<int> {
             std::vector<int> scaled(width, 0);
