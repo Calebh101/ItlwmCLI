@@ -228,7 +228,7 @@ bool processCommand(std::string input) {
         log(1, format("Version: %s Legacy", VERSION));
         log(1, format("%s release, %s mode", BETA ? "Beta" : "Stable", DEBUG ? "debug" : "release"));
     } else if (action == "exit" || action == "e") { // 'e' is helpful, so the user doesn't think Ctrl-C is the only efficient way to exit
-        std::cout << "\033[2J" << "\n\nThanks for stopping by!" << '\n' << "Tip: itlwm will still be running even after you exit my program.";
+        std::cout << "\033[2J\033[1;1H" << "\n\nThanks for stopping by!" << '\n' << "Tip: itlwm will still be running even after you exit my program.\n";
         exit(0);
     } else if (action == "echo") { // Debug command, solely for command parsing tests; won't be listed to the user
         log(format("Received command of '%s' with %d extra arguments", action.c_str(), command.size() - 1));
@@ -283,6 +283,8 @@ bool processCommand(std::string input) {
             if (networks->count <= 0) {
                 log("The current network list is empty.");
             } else {
+                int n = 1;
+
                 for (int i = 0; i < networks->count; i++) {
                     ioctl_network_info network = networks->networks[i];
                     bool emptySsid = true;
@@ -295,7 +297,8 @@ bool processCommand(std::string input) {
                     }
 
                     if (emptySsid) continue;
-                    log(format("%d. %s (RSSI %d)%s", i + 1, network.ssid, network.rssi, network.rsn_protos == 0 ? "" : " (locked)"));
+                    log(format("%d. %s (RSSI %d)%s", n, network.ssid, network.rssi, network.rsn_protos == 0 ? "" : " (locked)"));
+                    n++;
                 }
             }
         } else {
