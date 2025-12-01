@@ -7,6 +7,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+        default: ''
 
 jobs:
   build:
@@ -26,11 +31,11 @@ jobs:
 
       - name: Build Debug
         run: |
-          ./build.sh -v debug
+          ./build.sh -v debug ${{ github.event.inputs.version }}
 
       - name: Build Release
         run: |
-          ./build.sh -v release
+          ./build.sh -v release ${{ github.event.inputs.version }}
 
       - name: Upload to Artifacts
         uses: actions/upload-artifact@v4

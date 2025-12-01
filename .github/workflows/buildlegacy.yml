@@ -7,6 +7,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+        default: ''
 
 jobs:
   build:
@@ -41,7 +46,7 @@ jobs:
       - name: Build
         run: |
           export PATH="${{ github.workspace }}/osxcross/target/bin:$PATH"
-          ./Legacy/build.sh -v
+          ./Legacy/build.sh -v ${{ github.event.inputs.version }}
 
       - name: Upload to Artifacts
         uses: actions/upload-artifact@v4
