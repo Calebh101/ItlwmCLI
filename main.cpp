@@ -452,7 +452,6 @@ int main(int argc, char* argv[]) {
 
         size_t start = (output.size() > VISIBLE_LOG_LINES) ? (output.size() - VISIBLE_LOG_LINES) : 0; // Where should we start rendering command logs?
         bool foundConnected = false; // If one of the networks returned from itlwm is the one we're connected to (it doesn't seem to do this in my testing)
-        std::string inputIndexPadding(LOG_INDEX_PADDING - 1, ' '); // Padding for the command line prompt row
 
         for (size_t i = start - positionAway; i < output.size() - positionAway; ++i) {
             std::string index = std::to_string(i + 1);
@@ -532,6 +531,11 @@ int main(int argc, char* argv[]) {
         maxRssi = *std::max_element(signalRssis.begin(), signalRssis.end()); // Maximum graph point (based on the entire dataset)
         if (minRssi == maxRssi) maxRssi = minRssi + 1;
 
+        // Fancy duplication stuff
+        int lastIndexLength = output.size();
+        std::stringstream hashtagStream;
+        hashtagStream << std::setw(LOG_INDEX_PADDING) << std::setfill(' ') << std::string(std::to_string(output.size()).size(), '#');
+
         // Get average RSSI
         long long rssiSum = 0;
         for (int n : signalRssis) rssiSum += abs(n);
@@ -605,7 +609,7 @@ int main(int argc, char* argv[]) {
             // Command line
             vbox({
                 vbox(output_elements),
-                hbox({text(fmt::format("{}#. > ", inputIndexPadding)), input->Render()}),
+                hbox({text(fmt::format("{}. > ", hashtagStream.str())), input->Render()}),
             }) | border | size(HEIGHT, EQUAL, VISIBLE_LOG_LINES + 3),
         });
     });

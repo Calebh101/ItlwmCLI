@@ -11,7 +11,7 @@ BUILD_64="$ROOT/build/x64"
 BUILD_WITHOUT_VERSION=false
 OPTIONS_STRING_RAW=""
 
-while getopts "vf:" opt; do
+while getopts "v" opt; do
     case $opt in
         v) BUILD_WITHOUT_VERSION=true ;;
         *)

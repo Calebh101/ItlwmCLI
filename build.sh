@@ -14,7 +14,7 @@ NO_BUILD_PACKAGES=false      # -p
 
 OPTIONS_STRING_RAW=""
 
-while getopts "vf:" opt; do
+while getopts "vp" opt; do
     case $opt in
         v) BUILD_WITHOUT_VERSION=true ;;
         p) NO_BUILD_PACKAGES=true ;;
@@ -26,7 +26,6 @@ while getopts "vf:" opt; do
 
     OPTIONS_STRING_RAW+="$opt"
 done
-
 
 if [[ -n "$OPTIONS_STRING_RAW" ]]; then
     OPTIONS_STRING="-$OPTIONS_STRING_RAW"
