@@ -392,7 +392,7 @@ int main(int argc, char* argv[]) {
     while (true) {
         clearTerminal();
         winsize w;
-        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w); // Get window size
+        ioctl(STDIN_FILENO, TIOCGWINSZ, &w); // Get window size
 
         // Get the RSSI stage
         rssi_stage rssiStage = rssiToRssiStage(rssi_available, station_info_available ? stationInfo->rssi : 0);
