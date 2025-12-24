@@ -1,3 +1,8 @@
+// ItlwmCLI Legacy main.cpp
+// Copyright 2026 by Calebh101
+//
+// This file contains the entire source code for ItlwmCLI Legacy.
+
 #include "Api.h"
 #include <iostream>
 #include <string>
