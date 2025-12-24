@@ -11,9 +11,9 @@
 #include <iomanip>
 #include <sstream>
 
-#define VERSION "0.0.0C"                 // Version of the app.
-#define BETA true                        // If the app is in beta.
-#define DEBUG false                      // The legacy version does not have a debug mode.
+#define VERSION "1.0.0A"                 // Version of the app.
+#define BETA false                       // If the app is in beta.
+#define DEBUG false                      // If the app is in debug mode.
 
 #define LOOP_INTERVAL 10000              // How much the program should wait in between each refresh, in microseconds.
 #define RSSI_UNAVAILABLE_THRESHOLD -200  // The RSSI that means unavailable/invalid.

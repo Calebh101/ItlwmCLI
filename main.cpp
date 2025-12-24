@@ -18,8 +18,8 @@
 #include "json.hpp"
 #include "filesystem.hpp"
 
-#define VERSION "0.0.0C"                 // Version of the app.
-#define BETA true                        // If the app is in beta.
+#define VERSION "1.0.0A"                 // Version of the app.
+#define BETA false                       // If the app is in beta.
 
 #define CONSTANT_REFRESH_INTERVAL 50     // How many milliseconds the UI should wait to refresh (<= 0 to disable). Must be a factor of 1000.
 #define RSSI_RECORD_INTERVAL 5           // How many iterations (CONSTANT_REFRESH_INTERVAL) to wait before the RSSI value should be recorded. The actual interval would be (CONSTANT_REFRESH_INTERVAL * RSSI_RECORD_INTERVAL) milliseconds.
@@ -443,8 +443,17 @@ int main(int argc, char* argv[]) {
     int minRssi = 0; // Minimum RSSI of the graph
     int maxRssi = 0; // Maximum RSSI of the graph
     std::string input_str; // What the user has inputted in the command line widget
-    auto input = Input(&input_str, "Type 'help' for available commands. Use up/down to scroll."); // The input provider for the command line widget
-    debug("Loading renderer...");
+
+    debug("Loading widgets...");
+    InputOption style = InputOption::Default();
+
+    style.transform = [](InputState state) {
+        state.element |= bgcolor(Color::Default); // FTXUI puts a weird white background on input elements
+        if (state.is_placeholder) state.element |= color(Color::RGB(128, 128, 128));
+        return state.element;
+    };
+
+    auto input = Input(&input_str, "Type 'help' for available commands. Use up/down, left/right to scroll.", style); // The input provider for the command line widget
 
     auto renderer = Renderer([&] {
         Elements output_elements;
