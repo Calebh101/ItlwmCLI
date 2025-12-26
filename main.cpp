@@ -1,5 +1,5 @@
 // ItlwmCLI main.cpp
-// Copyright 2025 by Calebh101
+// Copyright 2026 by Calebh101
 //
 // This file contains the entire source code for ItlwmCLI.
 
@@ -56,7 +56,7 @@ bool showSaveSettingsPrompt = true; // If we should ask to save a settings file 
 std::thread refresher; // The UI update thread
 ghc::filesystem::path exec; // Parent directory of the executable
 ghc::filesystem::path settingsfile; // The file path containing our settings (potentially)
-json settings; // Our global settings.
+json settings; // Our global settings
 
 enum rssi_stage {
     rssi_stage_excellent,
