@@ -18,7 +18,7 @@
 #include "json.hpp"
 #include "filesystem.hpp"
 
-#define VERSION "1.0.0A"                 // Version of the app.
+#define VERSION "1.0.0B"                 // Version of the app.
 #define BETA false                       // If the app is in beta.
 
 #define CONSTANT_REFRESH_INTERVAL 50     // How many milliseconds the UI should wait to refresh (<= 0 to disable). Must be a factor of 1000.
@@ -677,7 +677,7 @@ int main(int argc, char* argv[]) {
 
     debug("Starting application...");
     if (refresher.joinable()) refresher.detach();
-    std::system("clear");
+    std::cout << "\033[2J\033[H" << std::flush;
     running = true;
     screen.Loop(interactive);
     running = false;
