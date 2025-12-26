@@ -677,7 +677,6 @@ int main(int argc, char* argv[]) {
 
     debug("Starting application...");
     if (refresher.joinable()) refresher.detach();
-    std::cout << "\033[2J\033[H" << std::flush;
     running = true;
     screen.Loop(interactive);
     running = false;
