@@ -421,7 +421,9 @@ int main(int argc, char* argv[]) {
         debug("This program requires macOS to run.") // No Timmy, this doesn't work on Windows 11
     #endif
 
-    debug("Starting app...");
+    auto versionTypeString = DEBUG ? (BETA ? "Beta (Debug)" : "Debug") : (BETA ? "Beta" : "Release");
+    debug("Starting ItlwmCLI version {} {}", VERSION, versionTypeString);
+
     exec = ghc::filesystem::absolute(argv[0]).parent_path();
     settingsfile = exec / "ItlwmCLI.settings.json"; // File for settings
 
@@ -582,7 +584,7 @@ int main(int argc, char* argv[]) {
         return vbox({
             // Header
             vbox({
-                text(fmt::format("ItlwmCLI {} {} by Calebh101", VERSION, DEBUG ? (BETA ? "Debug (Beta)" : "Debug") : (BETA ? "Beta" : "Release"))) | center, // We tell the user if the program is a beta release, a debug binary, or both
+                text(fmt::format("ItlwmCLI {} {} by Calebh101", VERSION, versionTypeString)) | center, // We tell the user if the program is a beta release, a debug binary, or both
                 text(fmt::format("Powered by itlwm {}", network_platform_info_available ? platformInfo->driver_info_str: "Unknown")) | center,
             }) | border | size(HEIGHT, EQUAL, HEADER_LINES + 2),
             // Body
@@ -660,24 +662,23 @@ int main(int argc, char* argv[]) {
         return false;
     });
 
+    debug("Starting services...");
+    running = true;
+
     if (CONSTANT_REFRESH_INTERVAL > 0) {
         debug("Allowing constant refresh...");
 
         refresher = std::thread([&] {
-            while (true) {
+            while (running) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(CONSTANT_REFRESH_INTERVAL));
-
-                if (running) {
-                    screen.PostEvent(Event::Custom);
-                    iteration++;
-                }
+                screen.PostEvent(Event::Custom);
+                iteration++;
             }
         });
     }
 
     debug("Starting application...");
     if (refresher.joinable()) refresher.detach();
-    running = true;
     screen.Loop(interactive);
     running = false;
     api_terminate();
