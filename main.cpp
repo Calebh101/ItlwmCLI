@@ -59,7 +59,8 @@ std::thread refresher; // The UI update thread
 ghc::filesystem::path exec; // Parent directory of the executable
 ghc::filesystem::path settingsfile; // The file path containing our settings (potentially)
 json settings; // Our global settings
-std::mutex mutex;
+std::mutex mutex; // Mutex for locking
+bool global_station_info_available = false;
 
 enum rssi_stage {
     rssi_stage_excellent,
@@ -95,7 +96,7 @@ Color rssiStageToColor(rssi_stage stage) {
     switch (stage) {
         case rssi_stage_excellent: return Color::Green;
         case rssi_stage_good: return Color::Yellow;
-        case rssi_stage_fair: return Color::Orange;
+        case rssi_stage_fair: return Color::Orange1;
         case rssi_stage_poor: return Color::Red;
         case rssi_stage_unavailable: return Color::White;
     }
@@ -526,6 +527,11 @@ int main(int argc, char* argv[]) {
         station_info_available = station_info_available && stationInfo->rssi < 0 && stationInfo->rssi > RSSI_UNAVAILABLE_THRESHOLD;
         bool rssi_available = station_info_available;
 
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            global_station_info_available = station_info_available;
+        }
+
         // If the WiFi is off, then everything should be off
         if (network_power_state_available == false || currentPowerState == false) {
             network_ssid_available = false;
@@ -717,7 +723,7 @@ int main(int argc, char* argv[]) {
 
                         {
                             std::lock_guard<std::mutex> lock(mutex);
-                            availableCopy = station_info_available && stationInfo != nullptr;
+                            availableCopy = global_station_info_available && stationInfo != nullptr;
                             if (availableCopy) rssiCopy = stationInfo->rssi;
 
                             if (availableCopy) {
