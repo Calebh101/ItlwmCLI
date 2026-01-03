@@ -522,13 +522,25 @@ int main(int argc, char* argv[]) {
         std::memset(currentBssid, 0, sizeof(currentBssid));
 
         // Query itlwm
-        bool network_ssid_available = get_network_ssid(currentSsid);
-        bool network_bssid_available = get_network_bssid(currentBssid);
-        bool network_80211_state_available = get_80211_state(&current80211State);
-        bool network_power_state_available = get_power_state(&currentPowerState);
-        bool network_platform_info_available = get_platform_info(localPlatformInfo);
-        bool network_list_available = get_network_list(localNetworks);
-        bool station_info_available = get_station_info(localStationInfo);
+        bool network_ssid_available;
+        bool network_bssid_available;
+        bool network_80211_state_available;
+        bool network_power_state_available;
+        bool network_platform_info_available;
+        bool network_list_available;
+        bool station_info_available;
+
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+
+            network_ssid_available = get_network_ssid(currentSsid);
+            network_bssid_available = get_network_bssid(currentBssid);
+            network_80211_state_available = get_80211_state(&current80211State);
+            network_power_state_available = get_power_state(&currentPowerState);
+            network_platform_info_available = get_platform_info(&platformInfo);
+            network_list_available = get_network_list(&networks);
+            station_info_available = get_station_info(&stationInfo);
+        }
 
         // So uh, station_info_available is always false in my experience for some reason, so we're using a different method
         station_info_available = station_info_available && localStationInfo.rssi < 0 && localStationInfo.rssi > RSSI_UNAVAILABLE_THRESHOLD;
