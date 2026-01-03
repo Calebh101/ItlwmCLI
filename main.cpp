@@ -17,6 +17,8 @@
 #include <fstream>
 #include "json.hpp"
 #include "filesystem.hpp"
+#include <mutex>
+#include <atomic>
 
 #define VERSION "1.0.0B"                 // Version of the app.
 #define BETA false                       // If the app is in beta.
@@ -51,12 +53,13 @@ std::vector<std::string> output; // Logs
 std::deque<int16_t> signalRssis; // Signal strengths recorded (for graphs)
 int positionAway = 0; // How far we have scrolled up in the command line widget
 int logScrolledLeft = 0; // How far we've scrolled right in the command line
-bool running = false; // If the UI update thread should run
+std::atomic<bool> running{true}; // If the UI update thread should run
 bool showSaveSettingsPrompt = true; // If we should ask to save a settings file (if it doesn't already exist)
 std::thread refresher; // The UI update thread
 ghc::filesystem::path exec; // Parent directory of the executable
 ghc::filesystem::path settingsfile; // The file path containing our settings (potentially)
 json settings; // Our global settings
+std::mutex mutex;
 
 enum rssi_stage {
     rssi_stage_excellent,
@@ -91,10 +94,10 @@ std::string rssiStageToString(rssi_stage stage) {
 Color rssiStageToColor(rssi_stage stage) {
     switch (stage) {
         case rssi_stage_excellent: return Color::Green;
-        case rssi_stage_good: return Color::Green;
-        case rssi_stage_fair: return Color::Green;
-        case rssi_stage_poor: return Color::Green;
-        case rssi_stage_unavailable: return Color::Green;
+        case rssi_stage_good: return Color::Yellow;
+        case rssi_stage_fair: return Color::Orange;
+        case rssi_stage_poor: return Color::Red;
+        case rssi_stage_unavailable: return Color::White;
     }
 }
 
@@ -133,6 +136,7 @@ void debug(const std::string& input, Args&&... args) {
 
 // Add to command line widget logs ('output')
 void log(std::string input) {
+    std::lock_guard<std::mutex> lock(mutex);
     if (positionAway != 0) positionAway++; // If we're not following the logs, then scroll even farther away from them to stay where we are now
     output.push_back(input);
 }
@@ -240,7 +244,7 @@ void usage(std::string command = "") {
     } else if (command == "save" || command == "unsave") {
         log("save/unsave Usage:");
         log(1, "save/unsave help                          Print this help message.");
-        log(1, "save/unsace password [SSID] [password]    Save a password for a WiFi network, for use later.");
+        log(1, "save/unsave password [SSID] [password]    Save a password for a WiFi network, for use later.");
     } else if (command.empty()) {
         log("Usage:");
         log(1, "help [command]                            Print this help message, or optionally the help message of a different command.");
@@ -260,6 +264,7 @@ void usage(std::string command = "") {
 
 bool processCommand(std::string input) {
     trim(input);
+    if (input.empty()) return true;
     auto command = parseCommand(input); // The full list of arguments
     auto action = command[0]; // The thing the user is trying to do, the first argument
 
@@ -279,7 +284,7 @@ bool processCommand(std::string input) {
     } else if (action == "echo") { // Debug command, solely for command parsing tests; won't be listed to the user
         log(fmt::format("Received command of '{}' with {} extra arguments", action, command.size() - 1));
     } else if (action == "power") {
-        if (command.size() <= 2) {
+        if (command.size() >= 2) {
             const std::string status = command[1];
             int result;
 
@@ -340,7 +345,11 @@ bool processCommand(std::string input) {
                 return true;
             }
 
-            settings["savedPasswords"][*ssid] = pswd;
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                settings["savedPasswords"][*ssid] = pswd;
+            }
+
             bool saved = saveSettings(settings);
             log(fmt::format("Saved SSID '{}' with password '{}'!", ssid.value_or("<unknown>"), pswd.value_or("<unknown>")));
         } else if (subcommand == std::nullopt) {
@@ -357,7 +366,7 @@ bool processCommand(std::string input) {
             std::optional<std::string> ssid = atOrNull(command, 2);
 
             if (ssid == std::nullopt) {
-                log("Please provide ab SSID.");
+                log("Please provide an SSID.");
                 return true;
             }
 
@@ -385,7 +394,7 @@ bool processCommand(std::string input) {
                 showSaveSettingsPrompt = false;
                 _saveSettings(settings);
                 log("Saved settings!");
-            } else if (status == "decline") {
+            } else if (status == "deny") {
                 showSaveSettingsPrompt = false;
                 log("Declined to save settings.");
             } else {
@@ -425,7 +434,7 @@ int main(int argc, char* argv[]) {
     debug("Starting ItlwmCLI version {} {}", VERSION, versionTypeString);
 
     exec = ghc::filesystem::absolute(argv[0]).parent_path();
-    settingsfile = exec / "ItlwmCLI.settings.json"; // File for settings
+    settingsfile = exec / "ItlwmCLI.settings.json"; // File for settings, obviously
 
     // We finally get to the good stuff
     debug("Loading application...");
@@ -441,7 +450,7 @@ int main(int argc, char* argv[]) {
     uint32_t current80211State = 0;
 
     unsigned long iteration = 0; // How many times the refresher thread has iterated
-    unsigned long pastIteration = -1; // Keeping track of "have we already recorded for this iteration?"
+    signed long pastIteration = -1; // Keeping track of "have we already recorded for this iteration?"
     int minRssi = 0; // Minimum RSSI of the graph
     int maxRssi = 0; // Maximum RSSI of the graph
     std::string input_str; // What the user has inputted in the command line widget
@@ -458,26 +467,51 @@ int main(int argc, char* argv[]) {
     auto input = Input(&input_str, "Type 'help' for available commands. Use up/down, left/right to scroll.", style); // The input provider for the command line widget
 
     auto renderer = Renderer([&] {
+        std::vector<std::string> localOutput;
+        std::deque<int16_t> localSignalRssis;
+        int localPositionAway;
+        int localLogScrolledLeft;
+        unsigned long localIteration;
+
+        {
+            // Gotta lock stuff
+            std::lock_guard<std::mutex> lock(mutex);
+
+            localOutput = output;
+            localSignalRssis = signalRssis;
+            localPositionAway = positionAway;
+            localLogScrolledLeft = logScrolledLeft;
+            localIteration = iteration;
+        }
+
         Elements output_elements;
         Elements networks_elements;
 
-        size_t start = (output.size() > VISIBLE_LOG_LINES) ? (output.size() - VISIBLE_LOG_LINES) : 0; // Where should we start rendering command logs?
+        size_t start = (localOutput.size() > VISIBLE_LOG_LINES) ? (localOutput.size() - VISIBLE_LOG_LINES) : 0; // Where should we start rendering command logs?
         bool foundConnected = false; // If one of the networks returned from itlwm is the one we're connected to (it doesn't seem to do this in my testing)
 
-        for (size_t i = start - positionAway; i < output.size() - positionAway; ++i) {
+        int newStart = start - localPositionAway;
+        if (newStart < 0) newStart = 0;
+
+        int toRender = localOutput.size() - localPositionAway;
+        if (toRender < 0) toRender = 0;
+
+        for (size_t i = newStart; i < toRender; ++i) {
             std::string index = std::to_string(i + 1);
             std::string spaces = "";
             while (index.size() + spaces.size() < LOG_INDEX_PADDING) spaces += " "; // Pad so the line numbers line up correctly
-            output_elements.push_back(text(fmt::format("{}{}.   {}", spaces, index, output[i].size() > logScrolledLeft ? output[i].substr(logScrolledLeft) : "")));
+            output_elements.push_back(text(fmt::format("{}{}.   {}", spaces, index, localOutput[i].size() > localLogScrolledLeft ? localOutput[i].substr(localLogScrolledLeft) : "")));
         }
 
         while (output_elements.size() < VISIBLE_LOG_LINES) { // Pad with blanks to keep FTXUI consistent
             output_elements.insert(output_elements.begin(), text(""));
         }
 
-        // Make sure to clear each time, in case it changes
+        // Make sure to clear each time, in case it changes.
+        // We also clear stationInfo so we know it's at least initialized.
         std::memset(currentSsid, 0, sizeof(currentSsid));
         std::memset(currentBssid, 0, sizeof(currentBssid));
+        std::memset(stationInfo, 0, sizeof(*stationInfo));
 
         // Query itlwm
         bool network_ssid_available = get_network_ssid(currentSsid);
@@ -489,8 +523,8 @@ int main(int argc, char* argv[]) {
         bool station_info_available = get_station_info(stationInfo);
 
         // So uh, station_info_available is always false in my experience for some reason, so we're using a different method
-        station_info_available = station_info_available || stationInfo ? true : false;
-        bool rssi_available = station_info_available && stationInfo->rssi < 0 && stationInfo->rssi > RSSI_UNAVAILABLE_THRESHOLD;
+        station_info_available = station_info_available && stationInfo->rssi < 0 && stationInfo->rssi > RSSI_UNAVAILABLE_THRESHOLD;
+        bool rssi_available = station_info_available;
 
         // If the WiFi is off, then everything should be off
         if (network_power_state_available == false || currentPowerState == false) {
@@ -531,31 +565,30 @@ int main(int argc, char* argv[]) {
             networks_elements.push_back(text(""));
         }
 
-        if (rssi_available && iteration % RSSI_RECORD_INTERVAL == 0 && pastIteration != iteration) { // Every X iterations
-            signalRssis.push_back(rssi_available ? stationInfo->rssi : RSSI_UNAVAILABLE_THRESHOLD);
-            if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
-            pastIteration = iteration;
+        // Setup stuff for the graph
+        if (localSignalRssis.empty()) {
+            minRssi = 0;
+            maxRssi = 0;
+        } else {
+            minRssi = *std::min_element(localSignalRssis.begin(), localSignalRssis.end()); // Minimum graph point (based on the entire dataset)
+            maxRssi = *std::max_element(localSignalRssis.begin(), localSignalRssis.end()); // Maximum graph point (based on the entire dataset)
+            if (minRssi == maxRssi) maxRssi = minRssi + 1;
         }
 
-        // Setup stuff for the graph
-        minRssi = *std::min_element(signalRssis.begin(), signalRssis.end()); // Minimum graph point (based on the entire dataset)
-        maxRssi = *std::max_element(signalRssis.begin(), signalRssis.end()); // Maximum graph point (based on the entire dataset)
-        if (minRssi == maxRssi) maxRssi = minRssi + 1;
-
         // Fancy duplication stuff
-        int lastIndexLength = output.size();
+        int lastIndexLength = localOutput.size();
         std::stringstream hashtagStream;
-        hashtagStream << std::setw(LOG_INDEX_PADDING) << std::setfill(' ') << std::string(std::to_string(output.size()).size(), '#');
+        hashtagStream << std::setw(LOG_INDEX_PADDING) << std::setfill(' ') << std::string(std::to_string(localOutput.size()).size(), '#');
 
         // Get average RSSI
         long long rssiSum = 0;
-        for (int n : signalRssis) rssiSum += abs(n);
-        int rssiAverage = signalRssis.empty() ? 0 : -static_cast<int>(rssiSum / signalRssis.size());
+        for (int n : localSignalRssis) rssiSum += abs(n);
+        int rssiAverage = localSignalRssis.empty() ? 0 : -static_cast<int>(rssiSum / localSignalRssis.size());
 
-        auto makeGraph = [rssi_available, minRssi, maxRssi](int width, int height) -> std::vector<int> {
+        auto makeGraph = [rssi_available, minRssi, maxRssi, localSignalRssis](int width, int height) -> std::vector<int> {
             std::vector<int> scaled(width, 0);
-            if (signalRssis.empty()) return scaled; // Empty, we don't have data yet
-            std::deque<int16_t> data(signalRssis); // Duplicate the list
+            if (localSignalRssis.empty()) return scaled; // Empty, we don't have data yet
+            std::deque<int16_t> data(localSignalRssis); // Duplicate the list
             int i;
 
             if (data.size() * BAR_WIDTH > width) { // Truncate the copied list
@@ -626,6 +659,9 @@ int main(int argc, char* argv[]) {
     });
 
     auto interactive = CatchEvent(renderer, [&](Event event) { // Catch events, like keystrokes
+        std::lock_guard<std::mutex> lock(mutex);
+        int maxScroll = output.size() > VISIBLE_LOG_LINES ? static_cast<int>(output.size() - VISIBLE_LOG_LINES) : 0;
+
         if (event == Event::Return) { // User tried to enter a command
             trim(input_str);
             if (input_str.empty()) return true;
@@ -643,7 +679,7 @@ int main(int argc, char* argv[]) {
 
             return true;
         } else if (event == Event::ArrowUp) { // Scroll up
-            if (positionAway < output.size() - VISIBLE_LOG_LINES) {
+            if (positionAway < maxScroll) {
                 positionAway++;
             }
         } else if (event == Event::ArrowDown) { // Scroll down
@@ -671,16 +707,36 @@ int main(int argc, char* argv[]) {
         refresher = std::thread([&] {
             while (running) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(CONSTANT_REFRESH_INTERVAL));
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    iteration++;
+
+                    if (iteration % RSSI_RECORD_INTERVAL == 0) {
+                        int16_t rssiCopy = 0;
+                        bool availableCopy = false;
+
+                        {
+                            std::lock_guard<std::mutex> lock(mutex);
+                            availableCopy = station_info_available && stationInfo != nullptr;
+                            if (availableCopy) rssiCopy = stationInfo->rssi;
+
+                            if (availableCopy) {
+                                signalRssis.push_back(rssiCopy);
+                                if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
+                            }
+                        }
+                    }
+                }
+
                 screen.PostEvent(Event::Custom);
-                iteration++;
             }
         });
     }
 
     debug("Starting application...");
-    if (refresher.joinable()) refresher.detach();
     screen.Loop(interactive);
     running = false;
+    if (refresher.joinable()) refresher.join();
     api_terminate();
     return 0;
 }
