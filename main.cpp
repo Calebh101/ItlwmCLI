@@ -456,6 +456,7 @@ int main(int argc, char* argv[]) {
     int maxRssi = 0; // Maximum RSSI of the graph
     std::string input_str; // What the user has inputted in the command line widget
 
+    std::memset(stationInfo, 0, sizeof(*stationInfo));
     debug("Loading widgets...");
     InputOption style = InputOption::Default();
 
@@ -508,11 +509,9 @@ int main(int argc, char* argv[]) {
             output_elements.insert(output_elements.begin(), text(""));
         }
 
-        // Make sure to clear each time, in case it changes.
-        // We also clear stationInfo so we know it's at least initialized.
+        // Make sure to clear each time, in case it changes
         std::memset(currentSsid, 0, sizeof(currentSsid));
         std::memset(currentBssid, 0, sizeof(currentBssid));
-        std::memset(stationInfo, 0, sizeof(*stationInfo));
 
         // Query itlwm
         bool network_ssid_available = get_network_ssid(currentSsid);
@@ -719,17 +718,12 @@ int main(int argc, char* argv[]) {
 
                     if (iteration % RSSI_RECORD_INTERVAL == 0) {
                         int16_t rssiCopy = 0;
-                        bool availableCopy = false;
+                        bool availableCopy = global_station_info_available && stationInfo != nullptr;
 
-                        {
-                            std::lock_guard<std::mutex> lock(mutex);
-                            availableCopy = global_station_info_available && stationInfo != nullptr;
-                            if (availableCopy) rssiCopy = stationInfo->rssi;
-
-                            if (availableCopy) {
-                                signalRssis.push_back(rssiCopy);
-                                if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
-                            }
+                        if (availableCopy) {
+                            rssiCopy = stationInfo->rssi;
+                            signalRssis.push_back(rssiCopy);
+                            if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
                         }
                     }
                 }
