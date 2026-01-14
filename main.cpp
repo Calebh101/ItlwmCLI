@@ -468,7 +468,7 @@ int main(int argc, char* argv[]) {
     std::string input_str; // What the user has inputted in the command line widget
 
     debug("Loading widgets...");
-    log("Hello!");
+    log("Hello! Welcome to ItlwmCLI! Type 'help' for available commands, 'about' for app info.");
     InputOption style = InputOption::Default();
 
     style.transform = [](InputState state) {

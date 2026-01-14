@@ -16,7 +16,7 @@
 #include <iomanip>
 #include <sstream>
 
-#define VERSION "1.0.0A"                 // Version of the app.
+#define VERSION "1.0.0B"                 // Version of the app.
 #define BETA false                       // If the app is in beta.
 #define DEBUG false                      // If the app is in debug mode.
 
