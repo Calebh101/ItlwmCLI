@@ -684,36 +684,35 @@ int main(int argc, char* argv[]) {
     });
 
     auto interactive = CatchEvent(renderer, [&](Event event) { // Catch events, like keystrokes
-        std::lock_guard<std::mutex> lock(mutex);
-        int maxScroll = output.size() > VISIBLE_LOG_LINES ? static_cast<int>(output.size() - VISIBLE_LOG_LINES) : 0;
-
         if (event == Event::Return) { // User tried to enter a command
-            trim(input_str);
-            if (input_str.empty()) return true;
-            log("> " + input_str); // Echo command back into the log
-            std::string input(input_str); // Make a copy
-            input_str.clear();
-            positionAway = 0; // Make sure to scroll down
-            logScrolledLeft = 0; // Also make sure to scroll back to the right
-            screen.PostEvent(Event::Custom); // Update UI
+            std::string input;
 
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                trim(input_str);
+                if (input_str.empty()) return true;
+                log("> " + input_str);
+                input = input_str;
+                input_str.clear();
+                positionAway = 0;
+                logScrolledLeft = 0;
+            }
+
+            screen.PostEvent(Event::Custom); // Update UI
             bool valid = processCommand(input);
             if (!valid) log("Invalid command: " + input);
             return true;
-        } else if (event == Event::ArrowUp) { // Scroll up
-            if (positionAway < maxScroll) {
-                positionAway++;
-            }
-        } else if (event == Event::ArrowDown) { // Scroll down
-            if (positionAway > 0) {
-                positionAway--;
-            }
-        } else if (event == Event::ArrowRight) { // Scroll left
-            logScrolledLeft++;
-        } else if (event == Event::ArrowLeft) { // Scroll left
-            if (logScrolledLeft > 0) {
-                logScrolledLeft--;
-            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+
+            int maxScroll = output.size() > VISIBLE_LOG_LINES ? static_cast<int>(output.size() - VISIBLE_LOG_LINES) : 0;
+
+            if (event == Event::ArrowUp && positionAway < maxScroll) positionAway++;
+            else if (event == Event::ArrowDown && positionAway > 0) positionAway--;
+            else if (event == Event::ArrowRight) logScrolledLeft++;
+            else if (event == Event::ArrowLeft && logScrolledLeft > 0) logScrolledLeft--;
         }
 
         if (input->OnEvent(event)) return true;
