@@ -691,13 +691,13 @@ int main(int argc, char* argv[]) {
                 std::lock_guard<std::mutex> lock(mutex);
                 trim(input_str);
                 if (input_str.empty()) return true;
-                log("> " + input_str);
                 input = input_str;
                 input_str.clear();
                 positionAway = 0;
                 logScrolledLeft = 0;
             }
 
+            log("> " + input_str);
             screen.PostEvent(Event::Custom); // Update UI
             bool valid = processCommand(input);
             if (!valid) log("Invalid command: " + input);
