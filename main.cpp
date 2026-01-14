@@ -697,7 +697,7 @@ int main(int argc, char* argv[]) {
                 logScrolledLeft = 0;
             }
 
-            log("> " + input_str);
+            log("> " + input);
             screen.PostEvent(Event::Custom); // Update UI
             bool valid = processCommand(input);
             if (!valid) log("Invalid command: " + input);
