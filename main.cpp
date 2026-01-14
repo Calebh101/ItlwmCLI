@@ -560,7 +560,7 @@ int main(int argc, char* argv[]) {
                 }); // Is the SSID empty? Let's find out!
 
                 if (emptySsid) continue; // If it is, then we skip
-                bool connected = s.ssid_ok ? strcmp(currentSsid, reinterpret_cast<char*>(network.ssid)) == 0 : false; // If our current SSID matches the one we're scanning
+                bool connected = s.ssid_ok ? strcmp(localSsid, reinterpret_cast<char*>(network.ssid)) == 0 : false; // If our current SSID matches the one we're scanning
                 if (connected) foundConnected = true;
 
                 std::string ssid(reinterpret_cast<const char*>(network.ssid), strnlen(reinterpret_cast<const char*>(network.ssid), 32)); // fmt is stingy
@@ -635,7 +635,7 @@ int main(int argc, char* argv[]) {
                     vbox({
                         text(fmt::format("{}, {}", s.power_ok ? (currentPowerState ? "On" : "Off") : "Unavailable", parse80211State(s.state_ok, current80211State))),
                         text(fmt::format("{} @{} (channel {})", itlPhyModeToString(s.station_ok, localStationInfo.op_mode), s.platform_ok ? localPlatformInfo.device_info_str : "??", s.station_ok ? std::to_string(localStationInfo.channel) : "unavailable")),
-                        text(fmt::format("Current SSID: {}", s.ssid_ok ? currentSsid : "Unavailable")),
+                        text(fmt::format("Current SSID: {}", s.ssid_ok ? localSsid : "Unavailable")),
                         text(fmt::format("RSSI: {} ({}) (average: {})", rssi_available ? std::to_string(localStationInfo.rssi) : "Unavailable", rssiStageToString(rssiStage), std::to_string(rssiAverage))),
                     }) | border | size(WIDTH, EQUAL, Terminal::Size().dimx / 2) | size(HEIGHT, EQUAL, 6),
                     // Graph showing signal strengths
@@ -738,7 +738,7 @@ int main(int argc, char* argv[]) {
                     }
                 }
 
-                //screen.PostEvent(Event::Custom);
+                screen.PostEvent(Event::Custom);
             }
         });
     }
