@@ -505,12 +505,15 @@ int main(int argc, char* argv[]) {
             localStationInfo = stationInfo;
             localSignalRssis = signalRssis;
             localOutput = output;
+
+            localPositionAway = positionAway;
+            localLogScrolledLeft = logScrolledLeft;
         }
 
         Elements output_elements;
         Elements networks_elements;
 
-        size_t start = (localOutput.size() > VISIBLE_LOG_LINES) ? (localOutput.size() - VISIBLE_LOG_LINES) : 0; // Where should we start rendering command logs?
+        int start = static_cast<int>(localOutput.size()) - VISIBLE_LOG_LINES; // Where should we start rendering command logs?
         bool foundConnected = false; // If one of the networks returned from itlwm is the one we're connected to (it doesn't seem to do this in my testing)
 
         int newStart = start - localPositionAway;
