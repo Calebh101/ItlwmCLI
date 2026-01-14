@@ -687,7 +687,7 @@ int main(int argc, char* argv[]) {
             return true;
         }
 
-        {
+        if (event == Event::ArrowUp || event == Event::ArrowDown || event == Event::ArrowRight || event == Event::ArrowLeft) {
             std::lock_guard<std::mutex> lock(mutex);
             int maxScroll = output.size() > VISIBLE_LOG_LINES ? static_cast<int>(output.size() - VISIBLE_LOG_LINES) : 0;
 
@@ -695,6 +695,8 @@ int main(int argc, char* argv[]) {
             else if (event == Event::ArrowDown && positionAway > 0) positionAway--;
             else if (event == Event::ArrowRight) logScrolledLeft++;
             else if (event == Event::ArrowLeft && logScrolledLeft > 0) logScrolledLeft--;
+
+            return true;
         }
 
         if (input->OnEvent(event)) return true;
