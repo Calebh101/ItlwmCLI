@@ -48,6 +48,16 @@ using namespace ftxui;
 using namespace ghc::filesystem;
 using json = nlohmann::json;
 
+struct itlwm_snapshot {
+    bool ssid_ok;
+    bool bssid_ok;
+    bool state_ok;
+    bool power_ok;
+    bool platform_ok;
+    bool networks_ok;
+    bool station_ok;
+};
+
 auto screen = ScreenInteractive::TerminalOutput();
 std::vector<std::string> output; // Logs
 std::deque<int16_t> signalRssis; // Signal strengths recorded (for graphs)
@@ -60,7 +70,7 @@ ghc::filesystem::path exec; // Parent directory of the executable
 ghc::filesystem::path settingsfile; // The file path containing our settings (potentially)
 json settings; // Our global settings
 std::mutex mutex; // Mutex for locking
-bool global_station_info_available = false;
+itlwm_snapshot snapshot{}; // Keeping track of the current snapshot
 
 enum rssi_stage {
     rssi_stage_excellent,
@@ -458,6 +468,7 @@ int main(int argc, char* argv[]) {
     std::string input_str; // What the user has inputted in the command line widget
 
     debug("Loading widgets...");
+    log("Hello!");
     InputOption style = InputOption::Default();
 
     style.transform = [](InputState state) {
@@ -475,23 +486,25 @@ int main(int argc, char* argv[]) {
         int localLogScrolledLeft;
         unsigned long localIteration;
 
+        itlwm_snapshot s;
+        char localSsid[MAX_SSID_LENGTH];
+        char localBssid[32];
+
         network_info_list_t localNetworks;
         platform_info_t localPlatformInfo;
         station_info_t localStationInfo;
 
         {
-            // Gotta lock stuff
             std::lock_guard<std::mutex> lock(mutex);
-
-            localOutput = output;
-            localSignalRssis = signalRssis;
-            localPositionAway = positionAway;
-            localLogScrolledLeft = logScrolledLeft;
-            localIteration = iteration;
+            s = snapshot;
+            std::strcpy(localSsid, currentSsid);
+            std::strcpy(localBssid, currentBssid);
 
             localNetworks = networks;
             localPlatformInfo = platformInfo;
             localStationInfo = stationInfo;
+            localSignalRssis = signalRssis;
+            localOutput = output;
         }
 
         Elements output_elements;
@@ -517,55 +530,25 @@ int main(int argc, char* argv[]) {
             output_elements.insert(output_elements.begin(), text(""));
         }
 
-        // Make sure to clear each time, in case it changes
-        std::memset(currentSsid, 0, sizeof(currentSsid));
-        std::memset(currentBssid, 0, sizeof(currentBssid));
-
-        // Query itlwm
-        bool network_ssid_available;
-        bool network_bssid_available;
-        bool network_80211_state_available;
-        bool network_power_state_available;
-        bool network_platform_info_available;
-        bool network_list_available;
-        bool station_info_available;
-
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-
-            network_ssid_available = get_network_ssid(currentSsid);
-            network_bssid_available = get_network_bssid(currentBssid);
-            network_80211_state_available = get_80211_state(&current80211State);
-            network_power_state_available = get_power_state(&currentPowerState);
-            network_platform_info_available = get_platform_info(&platformInfo);
-            network_list_available = get_network_list(&networks);
-            station_info_available = get_station_info(&stationInfo);
-        }
-
-        // So uh, station_info_available is always false in my experience for some reason, so we're using a different method
-        station_info_available = station_info_available && localStationInfo.rssi < 0 && localStationInfo.rssi > RSSI_UNAVAILABLE_THRESHOLD;
-        bool rssi_available = station_info_available;
-
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            global_station_info_available = station_info_available;
-        }
+        // So uh, s.station_ok is always false in my experience for some reason, so we're using a different method
+        s.station_ok = localStationInfo.rssi < 0 && localStationInfo.rssi > RSSI_UNAVAILABLE_THRESHOLD;
+        bool rssi_available = s.station_ok;
 
         // If the WiFi is off, then everything should be off
-        if (network_power_state_available == false || currentPowerState == false) {
-            network_ssid_available = false;
-            network_bssid_available = false;
-            network_80211_state_available = false;
-            network_platform_info_available = false;
-            network_list_available = false;
-            station_info_available = false;
+        if (s.power_ok == false || currentPowerState == false) {
+            s.ssid_ok = false;
+            s.bssid_ok = false;
+            s.state_ok = false;
+            s.platform_ok = false;
+            s.networks_ok = false;
+            s.station_ok = false;
             rssi_available = false;
         }
 
-        if (network_80211_state_available == false || current80211State != ITL80211_S_RUN) rssi_available = false; // If we're not connected, don't record the signal strength
+        if (s.state_ok == false || current80211State != ITL80211_S_RUN) rssi_available = false; // If we're not connected, don't record the signal strength
         rssi_stage rssiStage = rssiToRssiStage(rssi_available, localStationInfo.rssi);
 
-        if (network_list_available) {
+        if (s.networks_ok) {
             std::sort(localNetworks.networks, localNetworks.networks + localNetworks.count, compareNetworkStrength); // Sort
             int amount = 0;
 
@@ -577,11 +560,11 @@ int main(int argc, char* argv[]) {
                 }); // Is the SSID empty? Let's find out!
 
                 if (emptySsid) continue; // If it is, then we skip
-                bool connected = network_ssid_available ? strcmp(currentSsid, reinterpret_cast<char*>(network.ssid)) == 0 : false; // If our current SSID matches the one we're scanning
+                bool connected = s.ssid_ok ? strcmp(currentSsid, reinterpret_cast<char*>(network.ssid)) == 0 : false; // If our current SSID matches the one we're scanning
                 if (connected) foundConnected = true;
 
                 std::string ssid(reinterpret_cast<const char*>(network.ssid), strnlen(reinterpret_cast<const char*>(network.ssid), 32)); // fmt is stingy
-                networks_elements.push_back(text(fmt::format("{}. {} (RSSI {}) {} {}", amount + 1, ssid, std::to_string(network.rssi), network.rsn_protos == 0 ? "" : "(locked)", network_ssid_available && connected ? "(connected)" : "")));
+                networks_elements.push_back(text(fmt::format("{}. {} (RSSI {}) {} {}", amount + 1, ssid, std::to_string(network.rssi), network.rsn_protos == 0 ? "" : "(locked)", s.ssid_ok && connected ? "(connected)" : "")));
                 amount++;
             }
         }
@@ -643,16 +626,16 @@ int main(int argc, char* argv[]) {
             // Header
             vbox({
                 text(fmt::format("ItlwmCLI {} {} by Calebh101", VERSION, versionTypeString)) | center, // We tell the user if the program is a beta release, a debug binary, or both
-                text(fmt::format("Powered by itlwm {}", network_platform_info_available ? localPlatformInfo.driver_info_str: "Unknown")) | center,
+                text(fmt::format("Powered by itlwm {}", s.platform_ok ? localPlatformInfo.driver_info_str: "Unknown")) | center,
             }) | border | size(HEIGHT, EQUAL, HEADER_LINES + 2),
             // Body
             hbox({
                 vbox({
                     // Stats
                     vbox({
-                        text(fmt::format("{}, {}", network_power_state_available ? (currentPowerState ? "On" : "Off") : "Unavailable", parse80211State(network_80211_state_available, current80211State))),
-                        text(fmt::format("{} @{} (channel {})", itlPhyModeToString(station_info_available, localStationInfo.op_mode), network_platform_info_available ? localPlatformInfo.device_info_str : "??", station_info_available ? std::to_string(localStationInfo.channel) : "unavailable")),
-                        text(fmt::format("Current SSID: {}", network_ssid_available ? currentSsid : "Unavailable")),
+                        text(fmt::format("{}, {}", s.power_ok ? (currentPowerState ? "On" : "Off") : "Unavailable", parse80211State(s.state_ok, current80211State))),
+                        text(fmt::format("{} @{} (channel {})", itlPhyModeToString(s.station_ok, localStationInfo.op_mode), s.platform_ok ? localPlatformInfo.device_info_str : "??", s.station_ok ? std::to_string(localStationInfo.channel) : "unavailable")),
+                        text(fmt::format("Current SSID: {}", s.ssid_ok ? currentSsid : "Unavailable")),
                         text(fmt::format("RSSI: {} ({}) (average: {})", rssi_available ? std::to_string(localStationInfo.rssi) : "Unavailable", rssiStageToString(rssiStage), std::to_string(rssiAverage))),
                     }) | border | size(WIDTH, EQUAL, Terminal::Size().dimx / 2) | size(HEIGHT, EQUAL, 6),
                     // Graph showing signal strengths
@@ -706,7 +689,6 @@ int main(int argc, char* argv[]) {
 
         {
             std::lock_guard<std::mutex> lock(mutex);
-
             int maxScroll = output.size() > VISIBLE_LOG_LINES ? static_cast<int>(output.size() - VISIBLE_LOG_LINES) : 0;
 
             if (event == Event::ArrowUp && positionAway < maxScroll) positionAway++;
@@ -728,15 +710,27 @@ int main(int argc, char* argv[]) {
         refresher = std::thread([&] {
             while (running) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(CONSTANT_REFRESH_INTERVAL));
+
                 {
                     std::lock_guard<std::mutex> lock(mutex);
                     iteration++;
 
+                    std::memset(currentSsid, 0, sizeof(currentSsid));
+                    std::memset(currentBssid, 0, sizeof(currentBssid));
+
+                    snapshot.ssid_ok = get_network_ssid(currentSsid);
+                    snapshot.bssid_ok = get_network_bssid(currentBssid);
+                    snapshot.state_ok = get_80211_state(&current80211State);
+                    snapshot.power_ok = get_power_state(&currentPowerState);
+                    snapshot.platform_ok = get_platform_info(&platformInfo);
+                    snapshot.networks_ok = get_network_list(&networks);
+                    snapshot.station_ok = get_station_info(&stationInfo);
+
                     if (iteration % RSSI_RECORD_INTERVAL == 0) {
                         int16_t rssiCopy = 0;
-                        bool availableCopy = global_station_info_available;
+                        bool available = stationInfo.rssi < 0 && stationInfo.rssi > RSSI_UNAVAILABLE_THRESHOLD && currentPowerState && current80211State == ITL80211_S_RUN;
 
-                        if (availableCopy) {
+                        if (available) {
                             rssiCopy = stationInfo.rssi;
                             signalRssis.push_back(rssiCopy);
                             if (signalRssis.size() > MAX_RSSI_RECORD_LENGTH) signalRssis.pop_front();
@@ -744,7 +738,7 @@ int main(int argc, char* argv[]) {
                     }
                 }
 
-                screen.PostEvent(Event::Custom);
+                //screen.PostEvent(Event::Custom);
             }
         });
     }
