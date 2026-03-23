@@ -68,3 +68,7 @@ Requirements:
 - [gulrak/filesystem](https://github.com/gulrak/filesystem) for letting me compile lower than Catalina.
 - [The LLVM Project](https://github.com/llvm/llvm-project) for a static version of the standard library (`libc++` and `libc++abi`)
 - Apple for macOS (even though it's a love-hate relationship)
+
+# Support
+
+Discord: https://discord.gg/gbZyPuqZ6n
