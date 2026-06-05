@@ -18,6 +18,8 @@ This tool also works in macOS Recovery, even though HeliPort does not. You just 
 
 To open it, simply run the binary. You can double-click it from Finder, or use the command line to start it.
 
+[**Looking for troubleshooting?**](#troubleshooting)
+
 # Compatibility
 
 - macOS Sierra (10.12) through macOS Tahoe (26) (64-bit).
@@ -48,6 +50,10 @@ That should be all, hope you enjoy! Note that this tool can safely be closed, an
 # Index
 
 - RSSI is a way to measure signal strength, and it's always negative. The closer it is to 0, the better your connection is. If it's super far *away* from 0 (like -90), that WiFi connection is *not* good. Typically -30 to -50 is really good, and -80 to -90 is pretty bad.
+
+# Troubleshooting
+
+If the latest release doesn't work, first try the debug version. If that doesn't work, try release (then debug) of release **0.0.0B**. If none of those work, check out our [support options](#support).
 
 # Compiling Yourself
 
